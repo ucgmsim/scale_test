@@ -1,0 +1,36 @@
+#!/bin/bash
+set -eou pipefail
+E3D_PAR=$1
+
+if [ ! -f "${E3D_PAR}" ]; then
+    echo "The require e3d.par file does not exist: ${E3D_PAR}"
+fi
+
+nx=$(grep '^nx=' "${E3D_PAR}" | cut -d= -f2 | tr -d '"')
+ny=$(grep '^ny=' "${E3D_PAR}" | cut -d= -f2 | tr -d '"')
+nz=$(grep '^nz=' "${E3D_PAR}" | cut -d= -f2 | tr -d '"')
+
+SIZE=$(awk -v nx="${nx}" -v ny="${ny}" -v nz="${nz}" -f - <<EOF
+BEGIN {
+    nxy = nx * ny;
+    nxz = nx * nz;
+    nyz = ny * nz;
+    nmax = nxy;
+    if (nxz > nmax)
+        nmax = nxz;
+    if (nyz > nmax)
+        nmax = nyz;
+
+    mem = 4 * (31 * nx * ny * nz + 56 * nmax + 6 * (nx + nz));
+    if (mem > 1.00 * 10 ^ 12)
+        print "x_large";
+    else if (mem > 3.072 * 10 ^ 11)
+        printf "large";
+    else if (mem > 7.68 * 10 ^ 10)
+        printf "medium";
+    else
+        printf "small";
+}
+EOF
+)
+cylc message "${SIZE}"
