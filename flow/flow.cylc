@@ -47,34 +47,53 @@
 [runtime]
 [[root]]
     platform = barcelona
-
+    [[[environment]]]
+    CONTAINER = "${CYLC_WORKFLOW_RUN_DIR}/runner.sif"
 [[VM]]
 [[EMOD3D]]
 
 # TODO: Set the generate velocity model cores and mem
+
+
+{% for simulation in weak_test %}
+[[VM<weak_test={{simulation['cores']}}>]]
+        [[[environment]]]
+        EVENT_SHARE="${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
+        NX="{{simulation['nx'] * 0.1}}"
+        NY="{{simulation['ny'] * 0.1}}"
+        NZ="{{simulation['nz'] * 0.1}}"
+{% endfor %}
+
 [[generate_velocity_model<weak_test>]]
+    pre-script = "module load singularity/4.1.5"
     script = """
-    apptainer exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "${EVENT_SHARE}/nzvm.cfg" --output-format HDF5 --out-dir ${PWD}
-    apptainer exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d ${PWD}/velocity_model.h5 ${EVENT_SHARE}/VM
+    sed -e "s;NX;${NX}" \
+        -e "s;NY;${NY}" \
+        -e "s;NZ;${NZ}" \
+        "${CYLC_WORKFLOW_SHARE_DIR}/nzvm_weak.cfg" > "${PWD}/nzvm.cfg"
+    singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "/event/nzvm.cfg" --output-format HDF5 --out-dir /out
+    singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d /out/velocity_model.h5 /event/Velocity_Model
     rm velocity_model.h5
     """
-    inherit = VM
+    inherit = VM<weak_test>
 
     [[[environment]]]
-        NZCVM_PATH = "/nesi/project/nesi00213/nzcvm_data"
+        NZCVM_PATH = "/gpfs/projects/cant1/nzcvm_data"
         APPTAINER_BINDPATH = "$PWD:/out,${EVENT_SHARE}:/event,${NZCVM_PATH}:/nzcvm"
         EVENT_SHARE = "${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
 
 [[generate_velocity_model_strong]]
+    pre-script = "module load singularity/4.1.5"
     script = """
-    apptainer exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "${EVENT_SHARE}/nzvm.cfg" --output-format HDF5 --out-dir ${PWD}
-    apptainer exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d ${PWD}/velocity_model.h5 ${EVENT_SHARE}/VM
+    sed -e
+    singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "/event/nzvm.cfg" --output-format HDF5 --out-dir /out
+    singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d /out/velocity_model.h5 /event/Velocity_Model
     rm velocity_model.h5
     """
     inherit = VM
 
     [[[environment]]]
-        NZCVM_PATH = "/nesi/project/nesi00213/nzcvm_data"
+        NZCVM_PATH = "/gpfs/projects/cant1/nzcvm_data"
         EVENT_SHARE = "${CYLC_WORKFLOW_SHARE_DIR}/strong/"
         APPTAINER_BINDPATH = "$PWD:/out,${EVENT_SHARE}:/event,${NZCVM_PATH}:/nzcvm"
 
@@ -87,8 +106,13 @@
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
         --mem-per-cpu=2GB
-        [[[ENVIRONMENT]]]
-        EVENT_SHARE="${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
+        [[[environment]]]
+        VM="${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
+        SRF_FILE="${CYLC_WORKFLOW_SHARE_DIR}/realisation.srf"
+        EMOD3D="/gpfs/projects/cant1/EMOD3D/tools/emod3d-mpi_v3.0.13"
+        NX="{{simulation['nx']}}"
+        NY="{{simulation['ny']}}"
+        NZ="{{simulation['nz']}}"
 {% endfor %}
 
 {% for simulation in strong_test %}
@@ -97,23 +121,38 @@
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
         --mem-per-cpu=2GB
-        [[[ENVIRONMENT]]]
-        EVENT_SHARE="${CYLC_WORKFLOW_SHARE_DIR}/strong_%(strong_test)s"
+        [[[environment]]]
+        SRF_FILE="${CYLC_WORKFLOW_SHARE_DIR}/realisation.srf"
+        EMOD3D="/gpfs/projects/cant1/EMOD3D/tools/emod3d-mpi_v3.0.13"
+        VM="${CYLC_WORKFLOW_SHARE_DIR}/strong"
 {% endfor %}
 
 [[emod3d_weak_scaling<weak_test>]]
-    pre-script = "spack load intel-oneapi-mpi"
+    pre-script = "module load openmpi/4.1.5-gcc"
     script = """
-    sed -i "s;OUTPUT;${PWD};g" "s;SIMULATION_ROOT;${EVENT_SHARE};g" $EVENT_SHARE/e3d.par
-    mpirun $EMOD3D -args par=$EVENT_SHARE/e3d.par
+    sed -e "s;OUTPUT;${PWD};g" \
+        -e "s;VM;${VM};g" \
+        -e "s;SRF_FILE;${SRF_FILE}" \
+        -e "s;STAT_FILE;${STAT_FILE}" \
+        -e "s;NX;${NX}" \
+        -e "s;NY;${NY}" \
+        -e "s;NZ;${NZ}" \
+        $CYLC_WORKFLOW_SHARE_DIR/e3d_weak.par > ${PWD}/e3d.par
+    mkdir -p "${PWD}/LF/OutBin" "${PWD}/LF/SeismoBin" "${PWD}/LF/Restart" "${PWD}/LF/Log" "${PWD}/LF/TSFiles"
+    mpirun $EMOD3D -args par=${PWD}/e3d.par
     """
     inherit = EMOD3D_WEAK<weak_test>
 
 
 [[emod3d_strong_scaling<strong_test>]]
-    pre-script = "spack load intel-oneapi-mpi"
+    pre-script = "module load openmpi/4.1.5-gcc"
     script = """
-    sed -i "s;OUTPUT;${PWD};g" "s;SIMULATION_ROOT;${EVENT_SHARE};g" ${EVENT_SHARE}/e3d.par
-    mpirun $EMOD3D -args par=$EVENT_SHARE/e3d.par
+    sed -e "s;OUTPUT;${PWD};g" \
+        -e "s;VM;${strong};g" \
+        -e "s;SRF_FILE;${SRF_FILE}" \
+        -e "s;STAT_FILE;${STAT_FILE}" \
+        $CYLC_WORKFLOW_SHARE_DIR/e3d_strong.par > ${PWD}/e3d.par
+    mkdir -p "${PWD}/LF/OutBin" "${PWD}/LF/SeismoBin" "${PWD}/LF/Restart" "${PWD}/LF/Log" "${PWD}/LF/TSFiles"
+    mpirun $EMOD3D -args par=${PWD}/e3d.par
     """
     inherit = EMOD3D_STRONG<strong_test>
