@@ -2,8 +2,8 @@
 {% from "load_data" import load_json %}
 
 [meta]
-      title = NZ Validation Workflow
-      description = """NZ Validation Workflow
+      title = EMOD3D Scale Test
+      description = """EMOD3D Scale Test
 
       This workflow can be executed on any HPC cluster or local machine with cylc installed. To do this:
 
@@ -12,9 +12,9 @@
       3. Update the platform and paths indicated below to change the location of the data files.
          - To define a platform for your cluster use: https://cylc.github.io/cylc-doc/stable/html/reference/config/writing-platform-configs.html.
          - To run on your own computer, set the platform to "localhost". No other configuration is required.
-      4. Start the workflow: `cylc vip simulation_database`.
+      4. Start the workflow: `cylc vip scale_test`.
       5. Interact with the running workflow with `cylc tui`.
-      6. Results will appear in `~/cylc-run/simulation_database/runN/share/<event>`, one for each event in `events.json`.
+      6. Timing results will show up in the cylc `db` file in the `log` folder.
 
       Dependencies
       ------------
@@ -22,231 +22,98 @@
       - Apptainer (https://apptainer.org/)
       """
 
-{% set events = load_json('events.json') %}
-{% set runahead = 10 %}
+{% set weak_test = load_data('weak_scaling.csv') %}
+{% set strong_test = load_data('strong_scaling.csv') %}
 
 [task parameters]
-      event = {{ events | join(', ') }}
-
+    weak_test = {{ weak_test | map(attribute='cores') | join(', ') }}
+    strong_test = {{ strong_test | map(attribute='cores') | join(', ') }}
 [scheduling]
     [[graph]]
     # NOTE: suceeded and fail for emod3d must both be optional if both execution paths are used
-    # The idea of the cleanup_emod3d job is to limit the number of generated VMs to at most 10 at a time to limit disk usage
         R1 = """
-        create_simulation_directories => generate_velocity_model<event> & generate_station_coordinates<event> & realisation_to_srf<event>
-    	cleanup_emod3d<event-{{runahead}}> => generate_velocity_model<event>
-        generate_velocity_model<event> => create_e3d_par<event> => estimate<event>
-        estimate<event>:small? => emod3d_small<event>
-        estimate<event>:medium? => emod3d_medium<event>
-        estimate<event>:large? => emod3d_large<event>
-        estimate<event>:x_large? => emod3d_x_large<event>
-        emod3d_small<event> | emod3d_medium<event> | emod3d_large<event> | emod3d_x_large<event> => lf_to_xarray<event> => cleanup_emod3d<event>
-        lf_to_xarray<event> => bb_sim<event> => im_calc<event> => upload_results<event>
-        generate_station_coordinates<event> => create_e3d_par<event>
-        generate_station_coordinates<event> => hf_sim<event> => bb_sim<event>
-        realisation_to_srf<event> => generate_stoch<event> => hf_sim<event>
-        realisation_to_srf<event> => create_e3d_par<event>
+        generate_velocity_model<weak_test> => emod3d_weak_scaling<weak_test>
+        generate_velocity_model_strong => emod3d_strong_scaling<strong_test>
+        emod3d_strong_scaling<strong_test-1> => emod3d_strong_scaling<strong_test>
         """
     [[queues]]
-        [[[rclone]]]
-                limit = 1
-                members = RCLONE
-        [[[large_job]]]
-                limit = 4
-                members = LARGE_JOB
-        [[[medium_job]]]
-                limit = 4
-                members = MEDIUM_JOB
-        [[[small_job]]]
-                limit = 4
-                members = SMALL_JOB
-        [[[throttle]]]
-                limit = 3
-                members = OTHER
-        [[[hf]]]
-                limit = 5
-                members = HF
         [[[vm]]]
                 limit = 5
                 members = VM
+        [[[emod3d]]]
+                limit = 5
+                members = EMOD3D
 
 [runtime]
 [[root]]
+    platform = barcelona
 
-    platform = cascade
-    pre-script = "spack load apptainer"
-    [[[environment]]]
-        EVENT = %(event)s
-        NZCVM_PATH = "/nesi/project/nesi00213/nzcvm_data"
-        EVENTS_DIR = "$CYLC_WORKFLOW_RUN_DIR/events"
-        EVENT_SHARE = $CYLC_WORKFLOW_SHARE_DIR/%(event)s
-        KO_MATRIX_PATH = /nesi/project/nesi00213/ko_matrices
-        STATIONS_PATH = "$CYLC_WORKFLOW_RUN_DIR/stations"
-        APPTAINER_BINDPATH = "$PWD:/out,${EVENT_SHARE}:/event,${KO_MATRIX_PATH}:/ko_matrices,${STATIONS_PATH}:/stations,${NZCVM_PATH}:/nzcvm"
-        CONTAINER = $CYLC_WORKFLOW_RUN_DIR/runner.sif
-        EMOD3D = /nesi/project/nesi00213/EMOD3D/tools/emod3d-mpi_v3.0.13
-        DEFAULTS = 24.2.2.1
-[[LARGE_JOB]]
-[[MEDIUM_JOB]]
-[[SMALL_JOB]]
-[[RCLONE]]
-[[OTHER]]
 [[VM]]
-[[HF]]
-[[create_e3d_par<event>]]
-    platform = localhost
+[[EMOD3D]]
+
+# TODO: Set the generate velocity model cores and mem
+[[generate_velocity_model<weak_test>]]
     script = """
-        apptainer exec -c $CONTAINER create-e3d-par $EVENT_SHARE/realisation.json $EVENT_SHARE/realisation.srf $EVENT_SHARE/Velocity_Model $EVENT_SHARE/stations $EVENT_SHARE/LF
-        sed -i 's/enable_restart=1/enable_restart=0/g' $EVENT_SHARE/LF/e3d.par
+    apptainer exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "${EVENT_SHARE}/nzvm.cfg" --output-format HDF5 --out-dir ${PWD}
+    apptainer exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d ${PWD}/velocity_model.h5 ${EVENT_SHARE}/VM
+    rm velocity_model.h5
     """
-    inherit = OTHER
-    [[[environment]]]
-        APPTAINER_BINDPATH = $EVENT_SHARE
-
-[[bb_sim<event>]]
-    script = apptainer exec -c "$CONTAINER" bb-sim /event/realisation.json /stations/stations.vs30 /event/realisation.lf /event/realisation.hf /event/realisation.bb
-    inherit = OTHER
-    [[[directives]]]
-        # SLURM: nodes=1, cpus=64, mem=256GB, walltime=1h
-        --nodes=1
-        --cpus-per-task=64
-        --mem=256GB
-        --time=01:00:00
-
-[[generate_velocity_model<event>]]
-    script = apptainer exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate-velocity-model /event/realisation.json /event/Velocity_Model --use-nzcvm --num-threads 64
     inherit = VM
-    [[[directives]]]
-        # SLURM: nodes=1, cpus=64, mem=128GB, walltime=6h
-        --nodes=1
-        --cpus-per-task=64
-        --mem=128GB
-        --time=06:00:00
 
-[[hf_sim<event>]]
-    script = apptainer exec -c "$CONTAINER" hf-sim /event/realisation.json /event/realisation.stoch /event/stations/stations.ll /event/realisation.hf
-    inherit = HF
-    [[[directives]]]
-        # SLURM: nodes=1, cpus=64, mem=128GB, walltime=12h
-        --nodes=1
-        --cpus-per-task=64
-        --mem=128GB
-        --time=12:00:00
+    [[[environment]]]
+        NZCVM_PATH = "/nesi/project/nesi00213/nzcvm_data"
+        APPTAINER_BINDPATH = "$PWD:/out,${EVENT_SHARE}:/event,${NZCVM_PATH}:/nzcvm"
+        EVENT_SHARE = "${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
 
-
-[[im_calc<event>]]
-    script = apptainer exec -c "$CONTAINER" im-calc /event/realisation.json /event/realisation.bb /event/intensity_measures.h5 --psa-rotd-maximum-memory-allocation 40 --ko-directory /ko_matrices
-    inherit = OTHER
-    [[[directives]]]
-        # SLURM: nodes=1, cpus=64, mem=256GB, walltime=4h
-        --nodes=1
-        --cpus-per-task=64
-        --mem=256GB
-        --time=04:00:00
-
-[[realisation_to_srf<event>]]
-    script = apptainer exec -c "$CONTAINER" realisation-to-srf /event/realisation.json /event/realisation.srf --genslip-path /EMOD3D/tools/genslip_v5.6.2
-    inherit = OTHER
-
-[[generate_stoch<event>]]
-    script = apptainer exec -c "$CONTAINER" generate-stoch /event/realisation.json /event/realisation.srf /event/realisation.stoch
-    inherit = HF
-
-[[generate_station_coordinates<event>]]
-    platform = localhost
-    inherit = OTHER
-    script = apptainer exec -c "$CONTAINER" generate-station-coordinates /event/realisation.json /stations/stations_input.ll /event/stations/
-
-[[estimate<event>]]
-    platform = localhost
-    script = "estimate_job_size $EVENT_SHARE/LF/e3d.par"
-    completion = succeeded and (small or medium or large or x_large)
-    inherit = OTHER
-
-    [[[outputs]]]
-        small = 'small'
-        medium = 'medium'
-        large = 'large'
-        x_large = 'x_large'
-
-
-[[emod3d_small<event>]]
-    pre-script = "spack load intel-oneapi-mpi"
-    script = "mpirun $EMOD3D -args par=$EVENT_SHARE/LF/e3d.par"
-    inherit = SMALL_JOB
-
-    [[[directives]]]
-        # SLURM: nodes=1, tasks=384, mem=384GB, walltime=3h
-        --nodes=1
-        --ntasks=384
-        --mem=384GB
-        --time=03:00:00
-
-
-[[emod3d_medium<event>]]
-    pre-script = "spack load intel-oneapi-mpi"
-    script = "mpirun $EMOD3D -args par=$EVENT_SHARE/LF/e3d.par"
-    inherit = MEDIUM_JOB
-
-    [[[directives]]]
-        # SLURM: nodes=3, tasks/node=384, mem/node=384GB, walltime=12h
-        --nodes=3
-        --ntasks-per-node=384
-        --mem-per-node=384GB
-        --time=12:00:00
-
-[[emod3d_large<event>]]
-    pre-script = "spack load intel-oneapi-mpi"
-    script = "mpirun $EMOD3D -args par=$EVENT_SHARE/LF/e3d.par"
-    inherit = LARGE_JOB
-
-    [[[directives]]]
-        # SLURM: nodes=4, tasks/node=384, mem/node=384GB, walltime=36h
-        --nodes=4
-        --ntasks-per-node=384
-        --mem-per-node=384GB
-        --time=36:00:00
-
-[[emod3d_x_large<event>]]
-    pre-script = "spack load intel-oneapi-mpi"
-    script = "mpirun $EMOD3D -args par=$EVENT_SHARE/LF/e3d.par"
-    inherit = LARGE_JOB
-
-    [[[directives]]]
-        # SLURM: nodes=6, tasks/node=384, mem/node=384GB, walltime=36h
-        --nodes=6
-        --ntasks-per-node=384
-        --mem-per-node=384GB
-        --time=36:00:00
-
-
-[[lf_to_xarray<event>]]
+[[generate_velocity_model_strong]]
     script = """
-        apptainer exec -c "$CONTAINER" lf-to-xarray /event/LF/OutBin /event/realisation.lf
-        apptainer exec -c "$CONTAINER" merge-ts hdf5 /event/LF/OutBin /event/realisation.xyts
+    apptainer exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "${EVENT_SHARE}/nzvm.cfg" --output-format HDF5 --out-dir ${PWD}
+    apptainer exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d ${PWD}/velocity_model.h5 ${EVENT_SHARE}/VM
+    rm velocity_model.h5
     """
-    inherit = OTHER
-    [[[directives]]]
-        # SLURM: nodes=1, cpus=64, mem=256GB, walltime=1h
-        --nodes=1
-        --cpus-per-task=64
-        --mem=256GB
-        --time=01:00:00
+    inherit = VM
 
-[[create_simulation_directories]]
-    platform = localhost
-    pre-script = ""
-    script = tar xf $EVENTS_DIR/realisations.tar.gz -C $CYLC_WORKFLOW_SHARE_DIR
+    [[[environment]]]
+        NZCVM_PATH = "/nesi/project/nesi00213/nzcvm_data"
+        EVENT_SHARE = "${CYLC_WORKFLOW_SHARE_DIR}/strong/"
+        APPTAINER_BINDPATH = "$PWD:/out,${EVENT_SHARE}:/event,${NZCVM_PATH}:/nzcvm"
 
-[[upload_results<event>]]
-    platform = localhost
-    inherit = RCLONE
+# TODO: Set the scaling parameters by family like:
+# https://cylc.github.io/cylc-doc/stable/html/user-guide/examples/external-data-files/index.html#:~:text=%7B%23%20Define%20a%20family%20for%20each%20weather%20station%20%23%7D
+
+{% for simulation in weak_test %}
+[[EMOD3D_WEAK<weak_test={{simulation['cores']}}>]]
+        [[[directives]]]
+        --ntasks={{simulation['cores']}}
+        --nodes={{simulation['nodes']}}
+        --mem-per-cpu=2GB
+        [[[ENVIRONMENT]]]
+        EVENT_SHARE="${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
+{% endfor %}
+
+{% for simulation in strong_test %}
+[[EMOD3D_STRONG<strong_test={{simulation['cores']}}>]]
+        [[[directives]]]
+        --ntasks={{simulation['cores']}}
+        --nodes={{simulation['nodes']}}
+        --mem-per-cpu=2GB
+        [[[ENVIRONMENT]]]
+        EVENT_SHARE="${CYLC_WORKFLOW_SHARE_DIR}/strong_%(strong_test)s"
+{% endfor %}
+
+[[emod3d_weak_scaling<weak_test>]]
+    pre-script = "spack load intel-oneapi-mpi"
     script = """
-    rclone copy --progress "${EVENT_SHARE}" "dropbox:/QuakeCoRE/Jake/Simulation Database/Ayushi Models/${EVENT}" --include "realisation.*" --include intensity_measures.h5
-    curl -d "Result upload for ${EVENT} complete" ntfy.sh/ayushi_validation_db
+    sed -i "s;OUTPUT;${PWD};g" "s;SIMULATION_ROOT;${EVENT_SHARE};g" $EVENT_SHARE/e3d.par
+    mpirun $EMOD3D -args par=$EVENT_SHARE/e3d.par
     """
+    inherit = EMOD3D_WEAK<weak_test>
 
-[[cleanup_emod3d<event>]]
-    platform = localhost
-    inherit = OTHER
-    script = rm -r $EVENT_SHARE/LF/Restart $EVENT_SHARE/LF/SeismoBin $EVENT_SHARE/Velocity_Model
+
+[[emod3d_strong_scaling<strong_test>]]
+    pre-script = "spack load intel-oneapi-mpi"
+    script = """
+    sed -i "s;OUTPUT;${PWD};g" "s;SIMULATION_ROOT;${EVENT_SHARE};g" ${EVENT_SHARE}/e3d.par
+    mpirun $EMOD3D -args par=$EVENT_SHARE/e3d.par
+    """
+    inherit = EMOD3D_STRONG<strong_test>

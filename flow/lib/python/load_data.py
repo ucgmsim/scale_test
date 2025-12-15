@@ -1,6 +1,7 @@
-import json
+import csv
 
 
-def load_json(filename):
-    with open(filename, "r") as json_file:
-        return json.load(json_file)
+def load_weak_cores(filepath):
+    with open(filepath, 'r') as f:
+        dict_reader = csv.DictReader(filepath)
+        return list(dict_reader)

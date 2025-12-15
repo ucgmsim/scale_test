@@ -1,104 +1,33 @@
-# Simulation workflow template
+# Scale testing repository
 
-This repo is a simulation workflow template. Use this as a starting point for
-your own simulations by setting this repository as the template repository
-in the new repository flow on GitHub.
+This repository builds a scale testing workflow to test new HPC infrastructure. This workflow tests the scaling of the cluster for EMOD3D in the following ways
 
-## Simulation folder structure
+1. Strong scaling. Here we fix a domain and duration and increase the number of cores given to the problem. Amdahl's law states our speedup follows the functional form $\frac{1}{s + p/N}$, where $s$ is the serial portion of execution, and $p$ the parallel portion of execution. This is an upper bound assuming perfect parallelisation, which never happens. Hence, we can measure deviation from this ideal scaling to get a sense of diminishing returns.
+2. Weak scaling. Here we grow both the problem size and the number of cores proportionally. The idea is that, assuming perfect weak scaling, the problem should complete in the same amount of time as we scale both cores and problem size. Of course, this never happens because of MPI overhead, CPU cache misses and context switching, etc.
 
-```
-flow
-├── bin
-│   └── estimate_job_size
-├── events.json
-├── flow.cylc
-├── lib
-│   └── python
-│       └── load_data.py
-└── stations
-    ├── stations.vs30
-    └── stations_input.ll
-```
+Strong and weak scaling are orthogonal to each other so we test both.
 
-The flow folder contains the actual workflow. The files contained in the directory are, roughly:
+## The Sample Event
 
-1. `estimate_job_size`, an awk script that estimates job size. Prints "small", "medium", "large" or "x-large" depending the simulation volume. Accepts an e3d.par file.
-2. `events.json`, a json array of events to run.
-3. `flow.cylc`, the workflow definition file.
-4. `lib/python/load_data.py`, tiny helper function to load json data.
-5. `stations/stations.vs30` and `stations.ll`, global station file. Used to generate station outputs for individual simulations.
+The chosen sample event is [the Mw=6.5 Seddon earthquake](https://www.geonet.org.nz/earthquake/2013p543824). Any event would suffice for this test because the serial portion attributed to the SRF is trivial compared to the overall simulation time.
 
-## Simulation workflow graph
+## Weak Scaling Tests
 
-```mermaid
-flowchart TD
-    %% Core simulation creation
-    A[create_simulation_directories] --> B(generate_velocity_model *event*)
-    A --> C(generate_station_coordinates *event*)
-    A --> D(realisation_to_srf *event*)
+For the weak scaling test we run 20 simulations with increasing domain size. From experience, wall-clock time scales perfectly linearly with the number of timesteps (i.e. runtime per 100 timesteps is roughly constant for a given simulation), hence we fix a small number of timesteps to make these tests cheap to run. Fixing `nt=1000` and varying `nx`, `ny`, `nz`, and core count to achieve a constant 1.5GB of simulation memory per core. Simulation memory is estimated using the formula $4(31\mathrm{nx}\mathrm{ny}\mathrm{nz} + 56  max(\mathrm{nx}\mathrm{ny}, \mathrm{ny}\mathrm{nz}, \mathrm{nx}\mathrm{nz}) + 6(\mathrm{nx} + \mathrm{nz}))$.
 
-    %% emod3d concurrency limit
-    E[cleanup_emod3d *event-runahead*] --> B
+| Cores | nx   | ny   | nz  |
+| ----- | ---- | ---- | --- |
+| 16    | 621  | 621  | 500 |
+| 32    | 878  | 878  | 500 |
+| 64    | 1242 | 1242 | 500 |
+| 128   | 1757 | 1757 | 500 |
+| 256   | 2484 | 2484 | 500 |
+| 512   | 3513 | 3513 | 500 |
+| 750   | 4252 | 4252 | 500 |
+| 1000  | 4910 | 4910 | 500 |
+| 1250  | 5489 | 5489 | 500 |
+| 1500  | 6013 | 6013 | 500 |
 
-    %% Velocity model chain
-    B --> F(create_e3d_par *event*)
-    F --> G(estimate *event*)
+## Strong Scaling Tests
 
-    %% Conditional estimates
-    G -- small? --> H(emod3d_small *event*)
-    G -- medium? --> I(emod3d_medium *event*)
-    G -- large? --> J(emod3d_large *event*)
-    G -- x_large? --> K(emod3d_x_large *event*)
-
-    %% Merge results
-    H --> L(lf_to_xarray *event*)
-    I --> L
-    J --> L
-    K --> L
-    L --> E
-    L --> M(bb_sim *event*)
-    M --> N(im_calc *event*)
-    N --> O(upload_results *event*)
-
-    %% Station coordinates paths
-    C --> F
-    C --> P(hf_sim *event*) --> M
-
-    %% Realisation paths
-    D --> Q(generate_stoch *event*) --> P
-    D --> F
-```
-
-| Stage                         | Event Parameter    | Description                                                                                                                                                |
-| ----------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| bb_sim                        | event              | Performs broadband simulation.                                                                                                                             |
-| cleanup_emod3d                | event-{{runahead}} | Cleans up EMOD3D run files after successful EMOD3D run. The `event-{{runahead}}` parameter implies that **at most {{runhead}} events** can be run at once. |
-| create_e3d_par                | event              | Creates EMOD3D parameters file.                                                                                                                            |
-| create_simulation_directories | event              | Unpacks realisation tarball into `$CYLC_WORKFLOW_DIRECTORY`.                                                                                               |
-| emod3d_large                  | event              | EMOD3D large job pathway.                                                                                                                                  |
-| emod3d_medium                 | event              | EMOD3D medium job pathway.                                                                                                                                 |
-| emod3d_small                  | event              | EMOD3D small job pathway.                                                                                                                                  |
-| emod3d_x_large                | event              | EMOD3D x-large job pathway.                                                                                                                                |
-| estimate                      | event              | Estimates job size for EMOD3D based on simulation volume.                                                                                                  |
-| generate_station_coordinates  | event              | Generates station coordinates from global station file.                                                                                                    |
-| generate_stoch                | event              | Generates stochastic input file for high-frequency simulation.                                                                                             |
-| generate_velocity_model       | event              | Generates a velocity model.                                                                                                                                |
-| hf_sim                        | event              | Performs high-frequency simulation.                                                                                                                        |
-| im_calc                       | event              | Performs intensity measure calculations.                                                                                                                   |
-| lf_to_xarray                  | event              | Converts EMOD3D outputs into xyts + waveform files.                                                                                                        |
-| realisation_to_srf            | event              | Produces SRF.                                                                                                                                              |
-| upload_results                | event              | Uploads results.                                                                                                                                           |
-
-### Workflow queues
-
-To avoid overwhelming HPCs the workflow has internal queues that buffer the number of simultaneous jobs submitted in each category.
-
-| Queue      | Jobs                                                                                            | Limit |
-| ---------- | ----------------------------------------------------------------------------------------------- | ----: |
-| rclone     | upload_results                                                                                  |     1 |
-| large_job  | emod3d_large                                                                                    |     4 |
-| medium_job | emod3d_medium                                                                                   |     4 |
-| small_job  | emod3d_small                                                                                    |     4 |
-| throttle   | create_e3d_par, bb_sim, im_calc, realisation_to_srf, generate_station_coordinates, lf_to_xarray |     3 |
-| hf         | generate_stoch, hf_sim                                                                          |     5 |
-| vm         | generate_velocity_model                                                                         |     5 |
+For the strong scaling test, we pick the median simulation size `nx = 2484`, `ny = 2484`, `nz = 500` and scale the number of cores from 64 up to 1500 in the increments 64, 128, 256, 512, 750, 1000, 1250, 1500.
