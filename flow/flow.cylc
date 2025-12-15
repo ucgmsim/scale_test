@@ -1,5 +1,5 @@
 #!Jinja2
-{% from "load_data" import load_json %}
+{% from "load_data" import load_data %}
 
 [meta]
       title = EMOD3D Scale Test
@@ -34,7 +34,6 @@
         R1 = """
         generate_velocity_model<weak_test> => emod3d_weak_scaling<weak_test>
         generate_velocity_model_strong => emod3d_strong_scaling<strong_test>
-        emod3d_strong_scaling<strong_test-1> => emod3d_strong_scaling<strong_test>
         """
     [[queues]]
         [[[vm]]]
@@ -42,7 +41,7 @@
                 members = VM
         [[[emod3d]]]
                 limit = 5
-                members = EMOD3D
+                members = EMOD3D_WEAK<weak_test>,EMOD3D_STRONG<strong_test>
 
 [runtime]
 [[root]]
@@ -85,7 +84,6 @@
 [[generate_velocity_model_strong]]
     pre-script = "module load singularity/4.1.5"
     script = """
-    sed -e
     singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "/event/nzvm.cfg" --output-format HDF5 --out-dir /out
     singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d /out/velocity_model.h5 /event/Velocity_Model
     rm velocity_model.h5
@@ -113,6 +111,7 @@
         NX="{{simulation['nx']}}"
         NY="{{simulation['ny']}}"
         NZ="{{simulation['nz']}}"
+
 {% endfor %}
 
 {% for simulation in strong_test %}
@@ -148,7 +147,7 @@
     pre-script = "module load openmpi/4.1.5-gcc"
     script = """
     sed -e "s;OUTPUT;${PWD};g" \
-        -e "s;VM;${strong};g" \
+        -e "s;VM;VM;g" \
         -e "s;SRF_FILE;${SRF_FILE}" \
         -e "s;STAT_FILE;${STAT_FILE}" \
         $CYLC_WORKFLOW_SHARE_DIR/e3d_strong.par > ${PWD}/e3d.par
