@@ -163,7 +163,7 @@ script = "cp -rn $CYLC_WORKFLOW_RUN_DIR/events/. $CYLC_WORKFLOW_SHARE_DIR/"
     pre-script = "module purge && module load openmpi/4.1.5-gcc"
     script = """
     sed -e "s;OUTPUT;${PWD};g" \
-        -e "s;VM;VM;g" \
+        -e "s;VM;${VM};g" \
         -e "s;SRF_FILE;${SRF_FILE};g" \
         -e "s;STAT_FILE;${STAT_FILE};g" \
         $CYLC_WORKFLOW_SHARE_DIR/e3d_strong.par > ${PWD}/e3d.par
