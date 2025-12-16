@@ -129,7 +129,7 @@
 {% endfor %}
 
 [[emod3d_weak_scaling<weak_test>]]
-    pre-script = "module load openmpi/4.1.5-gcc"
+    pre-script = "module purge && module load openmpi/4.1.5-gcc"
     script = """
     sed -e "s;OUTPUT;${PWD};g" \
         -e "s;VM;${VM};g" \
@@ -146,7 +146,7 @@
 
 
 [[emod3d_strong_scaling<strong_test>]]
-    pre-script = "module load openmpi/4.1.5-gcc"
+    pre-script = "module purge && module load openmpi/4.1.5-gcc"
     script = """
     sed -e "s;OUTPUT;${PWD};g" \
         -e "s;VM;VM;g" \
