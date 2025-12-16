@@ -32,27 +32,30 @@
     [[graph]]
     # NOTE: suceeded and fail for emod3d must both be optional if both execution paths are used
         R1 = """
+        copy => generate_velocity_model<weak_test> & generate_velocity_model_strong
         generate_velocity_model<weak_test> => emod3d_weak_scaling<weak_test>
         generate_velocity_model_strong => emod3d_strong_scaling<strong_test>
         """
     [[queues]]
-        [[[vm]]]
+        [[[all]]]
                 limit = 5
-                members = VM
-        [[[emod3d]]]
-                limit = 5
-                members = EMOD3D_WEAK<weak_test>,EMOD3D_STRONG<strong_test>
+                members = root
 
 [runtime]
 [[root]]
     platform = barcelona
     [[[environment]]]
     CONTAINER = "${CYLC_WORKFLOW_RUN_DIR}/runner.sif"
+    [[[directives]]]
+    --qos=gp_resa
+    --account=cant1
 [[VM]]
 [[EMOD3D]]
 
 # TODO: Set the generate velocity model cores and mem
-
+[[copy]]
+platform=localhost
+script = "cp -rn $CYLC_WORKFLOW_RUN_DIR/events/. $CYLC_WORKFLOW_SHARE_DIR/"
 
 {% for simulation in weak_test %}
 [[VM<weak_test={{simulation['cores']}}>]]
@@ -67,19 +70,24 @@
     pre-script = "module load singularity/4.1.5"
     script = """
     mkdir -p ${EVENT_SHARE}
-    sed -e "s;NX;${NX}" \
-        -e "s;NY;${NY}" \
-        -e "s;NZ;${NZ}" \
+    sed -e "s;NX;${NX};g" \
+        -e "s;NY;${NY};g" \
+        -e "s;NZ;${NZ};g" \
         "${CYLC_WORKFLOW_SHARE_DIR}/nzvm_weak.cfg" > "${PWD}/nzvm.cfg"
-    singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "/event/nzvm.cfg" --output-format HDF5 --out-dir /out
+    singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "/out/nzvm.cfg" --output-format HDF5 --out-dir /out
     singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d /out/velocity_model.h5 /event/Velocity_Model
     rm velocity_model.h5
     """
     inherit = VM<weak_test>
+    [[[directives]]]
+    --nodes=1
+    --ntasks=1
+    --cpus-per-task=56
+    --time=06:00:00
 
     [[[environment]]]
         NZCVM_PATH = "/gpfs/projects/cant1/nzcvm_data"
-        APPTAINER_BINDPATH = "$PWD:/out,${EVENT_SHARE}:/event,${NZCVM_PATH}:/nzcvm"
+        SINGULARITY_BIND = "$PWD:/out,${EVENT_SHARE}:/event,${NZCVM_PATH}:/nzcvm"
         EVENT_SHARE = "${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
 
 [[generate_velocity_model_strong]]
@@ -90,12 +98,16 @@
     singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d /out/velocity_model.h5 /event/Velocity_Model
     rm velocity_model.h5
     """
-    inherit = VM
+    [[[directives]]]
+    --nodes=1
+    --ntasks=1
+    --cpus-per-task=56
+    --time=06:00:00
 
     [[[environment]]]
         NZCVM_PATH = "/gpfs/projects/cant1/nzcvm_data"
         EVENT_SHARE = "${CYLC_WORKFLOW_SHARE_DIR}/strong/"
-        APPTAINER_BINDPATH = "$PWD:/out,${EVENT_SHARE}:/event,${NZCVM_PATH}:/nzcvm"
+        SINGULARITY_BIND = "$PWD:/out,${EVENT_SHARE}:/event,${NZCVM_PATH}:/nzcvm"
 
 # TODO: Set the scaling parameters by family like:
 # https://cylc.github.io/cylc-doc/stable/html/user-guide/examples/external-data-files/index.html#:~:text=%7B%23%20Define%20a%20family%20for%20each%20weather%20station%20%23%7D
@@ -109,6 +121,7 @@
         [[[environment]]]
         VM="${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
         SRF_FILE="${CYLC_WORKFLOW_SHARE_DIR}/realisation.srf"
+        STAT_FILE="${CYLC_WORKFLOW_SHARE_DIR}/stations.statcords"
         EMOD3D="/gpfs/projects/cant1/EMOD3D/tools/emod3d-mpi_v3.0.13"
         NX="{{simulation['nx']}}"
         NY="{{simulation['ny']}}"
@@ -124,6 +137,7 @@
         --mem-per-cpu=2GB
         [[[environment]]]
         SRF_FILE="${CYLC_WORKFLOW_SHARE_DIR}/realisation.srf"
+        STAT_FILE="${CYLC_WORKFLOW_SHARE_DIR}/stations.statcords"
         EMOD3D="/gpfs/projects/cant1/EMOD3D/tools/emod3d-mpi_v3.0.13"
         VM="${CYLC_WORKFLOW_SHARE_DIR}/strong"
 {% endfor %}
@@ -133,11 +147,11 @@
     script = """
     sed -e "s;OUTPUT;${PWD};g" \
         -e "s;VM;${VM};g" \
-        -e "s;SRF_FILE;${SRF_FILE}" \
-        -e "s;STAT_FILE;${STAT_FILE}" \
-        -e "s;NX;${NX}" \
-        -e "s;NY;${NY}" \
-        -e "s;NZ;${NZ}" \
+        -e "s;SRF_FILE;${SRF_FILE};g" \
+        -e "s;STAT_FILE;${STAT_FILE};g" \
+        -e "s;NX;${NX};g" \
+        -e "s;NY;${NY};g" \
+        -e "s;NZ;${NZ};g" \
         $CYLC_WORKFLOW_SHARE_DIR/e3d_weak.par > ${PWD}/e3d.par
     mkdir -p "${PWD}/LF/OutBin" "${PWD}/LF/SeismoBin" "${PWD}/LF/Restart" "${PWD}/LF/Log" "${PWD}/LF/TSFiles"
     mpirun $EMOD3D -args par=${PWD}/e3d.par
@@ -150,8 +164,8 @@
     script = """
     sed -e "s;OUTPUT;${PWD};g" \
         -e "s;VM;VM;g" \
-        -e "s;SRF_FILE;${SRF_FILE}" \
-        -e "s;STAT_FILE;${STAT_FILE}" \
+        -e "s;SRF_FILE;${SRF_FILE};g" \
+        -e "s;STAT_FILE;${STAT_FILE};g" \
         $CYLC_WORKFLOW_SHARE_DIR/e3d_strong.par > ${PWD}/e3d.par
     mkdir -p "${PWD}/LF/OutBin" "${PWD}/LF/SeismoBin" "${PWD}/LF/Restart" "${PWD}/LF/Log" "${PWD}/LF/TSFiles"
     mpirun $EMOD3D -args par=${PWD}/e3d.par
