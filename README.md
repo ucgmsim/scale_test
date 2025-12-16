@@ -9,7 +9,7 @@ Strong and weak scaling are orthogonal to each other so we test both.
 
 ## The Sample Event
 
-The chosen sample event is [the Mw=6.5 Seddon earthquake](https://www.geonet.org.nz/earthquake/2013p543824). Any event would suffice for this test because the serial portion attributed to the SRF is trivial compared to the overall simulation time.
+The chosen sample event is a modification of point source event from the GCMT catalogue. The choice of event is arbitrary given the SRF's trivial contribution to runtime.
 
 ## Weak Scaling Tests
 
