@@ -117,6 +117,7 @@ script = "cp -rn $CYLC_WORKFLOW_RUN_DIR/events/. $CYLC_WORKFLOW_SHARE_DIR/"
         [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
+        --time=01:00:00
         [[[environment]]]
         VM="${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
         SRF_FILE="${CYLC_WORKFLOW_SHARE_DIR}/realisation.srf"
@@ -133,6 +134,7 @@ script = "cp -rn $CYLC_WORKFLOW_RUN_DIR/events/. $CYLC_WORKFLOW_SHARE_DIR/"
         [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
+        --time=01:00:00
         [[[environment]]]
         SRF_FILE="${CYLC_WORKFLOW_SHARE_DIR}/realisation.srf"
         STAT_FILE="${CYLC_WORKFLOW_SHARE_DIR}/stations.statcords"
