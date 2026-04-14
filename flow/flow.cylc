@@ -2,8 +2,8 @@
 {% from "load_data" import load_data %}
 
 [meta]
-      title = EMOD3D Scale Test
-      description = """EMOD3D Scale Test
+      title = SW4 Scale Test
+      description = """SW4 Scale Test
 
       This workflow can be executed on any HPC cluster or local machine with cylc installed. To do this:
 
@@ -30,11 +30,10 @@
     strong_test = {{ strong_test | map(attribute='cores') | join(', ') }}
 [scheduling]
     [[graph]]
-    # NOTE: suceeded and fail for emod3d must both be optional if both execution paths are used
+    # NOTE: suceeded and fail for sw4 must both be optional if both execution paths are used
         R1 = """
-        copy => generate_velocity_model<weak_test> & generate_velocity_model_strong
-        generate_velocity_model<weak_test> => emod3d_weak_scaling<weak_test>
-        generate_velocity_model_strong => emod3d_strong_scaling<strong_test>
+        sw4_weak_scaling<weak_test>
+        sw4_strong_scaling<strong_test>
         """
     [[queues]]
         [[[all]]]
@@ -50,7 +49,7 @@
     --qos=gp_resa
     --account=cant1
 [[VM]]
-[[EMOD3D]]
+[[SW4]]
 
 # TODO: Set the generate velocity model cores and mem
 [[copy]]
@@ -61,68 +60,23 @@ script = "cp -rn $CYLC_WORKFLOW_RUN_DIR/events/. $CYLC_WORKFLOW_SHARE_DIR/"
 [[VM<weak_test={{simulation['cores']}}>]]
         [[[environment]]]
         EVENT_SHARE="${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
-        NX="{{simulation['nx'] * 0.1}}"
-        NY="{{simulation['ny'] * 0.1}}"
-        NZ="{{simulation['nz'] * 0.1}}"
+        NX="{{simulation['nx']}}"
+        NY="{{simulation['ny']}}"
+        NZ="{{simulation['nz']}}"
 {% endfor %}
 
-[[generate_velocity_model<weak_test>]]
-    pre-script = "module load singularity/4.1.5"
-    script = """
-    mkdir -p ${EVENT_SHARE}
-    sed -e "s;NX;${NX};g" \
-        -e "s;NY;${NY};g" \
-        -e "s;NZ;${NZ};g" \
-        "${CYLC_WORKFLOW_SHARE_DIR}/nzvm_weak.cfg" > "${PWD}/nzvm.cfg"
-    singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "/out/nzvm.cfg" --output-format HDF5 --out-dir /out
-    singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d /out/velocity_model.h5 /event/Velocity_Model
-    rm velocity_model.h5
-    """
-    inherit = VM<weak_test>
-    [[[directives]]]
-    --nodes=1
-    --ntasks=1
-    --cpus-per-task=56
-    --time=06:00:00
-
-    [[[environment]]]
-        NZCVM_PATH = "/gpfs/projects/cant1/nzcvm_data"
-        SINGULARITY_BIND = "$PWD:/out,${EVENT_SHARE}:/event,${NZCVM_PATH}:/nzcvm"
-        EVENT_SHARE = "${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
-
-[[generate_velocity_model_strong]]
-    pre-script = "module load singularity/4.1.5"
-    script = """
-    mkdir -p ${EVENT_SHARE}
-    singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" generate_3d_model "/event/nzvm.cfg" --output-format HDF5 --out-dir /out --np $(nproc)
-    singularity exec --env "NZCVM_DATA_ROOT=/nzcvm" -c "$CONTAINER" hdf5-to-emod3d /out/velocity_model.h5 /event/Velocity_Model
-    rm velocity_model.h5
-    """
-    [[[directives]]]
-    --nodes=1
-    --ntasks=1
-    --cpus-per-task=56
-    --time=06:00:00
-
-    [[[environment]]]
-        NZCVM_PATH = "/gpfs/projects/cant1/nzcvm_data"
-        EVENT_SHARE = "${CYLC_WORKFLOW_SHARE_DIR}/strong/"
-        SINGULARITY_BIND = "$PWD:/out,${EVENT_SHARE}:/event,${NZCVM_PATH}:/nzcvm"
 
 # TODO: Set the scaling parameters by family like:
 # https://cylc.github.io/cylc-doc/stable/html/user-guide/examples/external-data-files/index.html#:~:text=%7B%23%20Define%20a%20family%20for%20each%20weather%20station%20%23%7D
 
 {% for simulation in weak_test %}
-[[EMOD3D_WEAK<weak_test={{simulation['cores']}}>]]
+[[SW4_WEAK<weak_test={{simulation['cores']}}>]]
         [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
         --time=01:00:00
         [[[environment]]]
-        VM="${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
-        SRF_FILE="${CYLC_WORKFLOW_SHARE_DIR}/realisation.srf"
-        STAT_FILE="${CYLC_WORKFLOW_SHARE_DIR}/stations.statcords"
-        EMOD3D="/gpfs/projects/cant1/EMOD3D/tools/emod3d-mpi_v3.0.13"
+        SW4="SET_SW4_HERE"
         NX="{{simulation['nx']}}"
         NY="{{simulation['ny']}}"
         NZ="{{simulation['nz']}}"
@@ -130,44 +84,30 @@ script = "cp -rn $CYLC_WORKFLOW_RUN_DIR/events/. $CYLC_WORKFLOW_SHARE_DIR/"
 {% endfor %}
 
 {% for simulation in strong_test %}
-[[EMOD3D_STRONG<strong_test={{simulation['cores']}}>]]
+[[SW4_STRONG<strong_test={{simulation['cores']}}>]]
         [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
         --time=01:00:00
         [[[environment]]]
-        SRF_FILE="${CYLC_WORKFLOW_SHARE_DIR}/realisation.srf"
-        STAT_FILE="${CYLC_WORKFLOW_SHARE_DIR}/stations.statcords"
-        EMOD3D="/gpfs/projects/cant1/EMOD3D/tools/emod3d-mpi_v3.0.13"
-        VM="${CYLC_WORKFLOW_SHARE_DIR}/strong"
+        SW4="SET_SW4_HERE"
 {% endfor %}
 
-[[emod3d_weak_scaling<weak_test>]]
+[[sw4_weak_scaling<weak_test>]]
     pre-script = "module purge && module load openmpi/4.1.5-gcc"
     script = """
-    sed -e "s;OUTPUT;${PWD};g" \
-        -e "s;VM;${VM};g" \
-        -e "s;SRF_FILE;${SRF_FILE};g" \
-        -e "s;STAT_FILE;${STAT_FILE};g" \
-        -e "s;NX;${NX};g" \
+    sed -e "s;NX;${NX};g" \
         -e "s;NY;${NY};g" \
         -e "s;NZ;${NZ};g" \
-        $CYLC_WORKFLOW_SHARE_DIR/e3d_weak.par > ${PWD}/e3d.par
-    mkdir -p "${PWD}/LF/OutBin" "${PWD}/LF/SeismoBin" "${PWD}/LF/Restart" "${PWD}/LF/Log" "${PWD}/LF/TSFiles"
-    mpirun $EMOD3D -args par=${PWD}/e3d.par
+        $CYLC_WORKFLOW_SHARE_DIR/input_weak.in > ${PWD}/input.in
+    mpirun $SW4_WEAK ${PWD}/input.in
     """
-    inherit = EMOD3D_WEAK<weak_test>
+    inherit = SW4_WEAK<weak_test>
 
 
-[[emod3d_strong_scaling<strong_test>]]
+[[sw4_strong_scaling<strong_test>]]
     pre-script = "module purge && module load openmpi/4.1.5-gcc"
     script = """
-    sed -e "s;OUTPUT;${PWD};g" \
-        -e "s;VM;${VM};g" \
-        -e "s;SRF_FILE;${SRF_FILE};g" \
-        -e "s;STAT_FILE;${STAT_FILE};g" \
-        $CYLC_WORKFLOW_SHARE_DIR/e3d_strong.par > ${PWD}/e3d.par
-    mkdir -p "${PWD}/LF/OutBin" "${PWD}/LF/SeismoBin" "${PWD}/LF/Restart" "${PWD}/LF/Log" "${PWD}/LF/TSFiles"
-    mpirun $EMOD3D -args par=${PWD}/e3d.par
+    mpirun $SW4 $CYLC_WORKFLOW_SHARE_DIR/input_strong.in
     """
-    inherit = EMOD3D_STRONG<strong_test>
+    inherit = SW4_STRONG<strong_test>

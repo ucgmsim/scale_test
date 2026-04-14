@@ -1,0 +1,9 @@
+grid nx=512 ny=3513 nz=3513 h=100.0 lon=172.0 lat=-43.0 az=0.1 proj=tmerc datum=WGS84 lat_p=-43.0 lon_p=173 scale=0.9996
+
+block vp=1.7320508076e+03 vs=1000 rho=1500 qp=100.0 qs=50.0
+
+time steps=1000
+attenuation
+prefilter fc1=0.1 fc2=1.0 type=bandpass passes=2 order=2
+
+source x=6250 y=6250 z=5000 strike=0 rake=180 dip=90 m0=1.12e15 t0=1.0 freq=4.6 type=Liu
