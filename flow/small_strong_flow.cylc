@@ -25,7 +25,7 @@
 {% set strong_test = load_data('/nesi/project/nesi00213/sw4_scale_tests/scale_test_repo/scale_test/flow/strong_scaling.csv') %}
 
 [task parameters]
-    strong_test = {{ strong_test[:2] | map(attribute='cores') | join(', ') }}
+    strong_test = {{ strong_test[:1] | map(attribute='cores') | join(', ') }}
 [scheduling]
     [[graph]]
     # NOTE: suceeded and fail for sw4 must both be optional if both execution paths are used
@@ -47,7 +47,7 @@
 # TODO: Set the scaling parameters by family like:
 # https://cylc.github.io/cylc-doc/stable/html/user-guide/examples/external-data-files/index.html#:~:text=%7B%23%20Define%20a%20family%20for%20each%20weather%20station%20%23%7D
 
-{% for simulation in strong_test[:2] %}
+{% for simulation in strong_test[:1] %}
 [[SW4_STRONG<strong_test={{simulation['cores']}}>]]
         pre-script = """
             module purge
