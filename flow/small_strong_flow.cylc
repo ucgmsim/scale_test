@@ -22,7 +22,7 @@
       - Apptainer (https://apptainer.org/)
       """
 
-{% set strong_test = load_data('strong_scaling.csv') %}
+{% set strong_test = load_data('/nesi/project/nesi00213/sw4_scale_tests/scale_test_repo/scale_test/flow/strong_scaling.csv') %}
 
 [task parameters]
     strong_test = {{ strong_test[:2] | map(attribute='cores') | join(', ') }}
@@ -30,7 +30,7 @@
     [[graph]]
     # NOTE: suceeded and fail for sw4 must both be optional if both execution paths are used
         R1 = """
-        copy => sw4_strong_scaling<strong_test>
+        sw4_strong_scaling<strong_test>
         """
     [[queues]]
         [[[all]]]
@@ -115,6 +115,6 @@
 
 [[sw4_strong_scaling<strong_test>]]
     script = """
-    mpirun $SW4 $CYLC_WORKFLOW_SHARE_DIR/input_strong.in
+    mpirun $SW4 /nesi/project/nesi00213/sw4_scale_tests/scale_test_repo/scale_test/flow/events/input_strong.in
     """
     inherit = SW4_STRONG<strong_test>
