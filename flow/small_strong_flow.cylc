@@ -22,18 +22,15 @@
       - Apptainer (https://apptainer.org/)
       """
 
-{% set weak_test = load_data('weak_scaling.csv') %}
 {% set strong_test = load_data('strong_scaling.csv') %}
 
 [task parameters]
-    weak_test = {{ weak_test | map(attribute='cores') | join(', ') }}
-    strong_test = {{ strong_test | map(attribute='cores') | join(', ') }}
+    strong_test = {{ strong_test[:2] | map(attribute='cores') | join(', ') }}
 [scheduling]
     [[graph]]
     # NOTE: suceeded and fail for sw4 must both be optional if both execution paths are used
         R1 = """
-        sw4_weak_scaling<weak_test>
-        sw4_strong_scaling<strong_test>
+        copy => sw4_strong_scaling<strong_test>
         """
     [[queues]]
         [[[all]]]
@@ -42,68 +39,29 @@
 
 [runtime]
 [[root]]
-    platform = barcelona
+    platform = mahuika
     [[[environment]]]
-    CONTAINER = "${CYLC_WORKFLOW_RUN_DIR}/runner.sif"
     [[[directives]]]
-    --qos=gp_resa
-    --account=cant1
+    --account=nesi00213
     
 [[SW4]]
 
-# TODO: Set the generate velocity model cores and mem
 [[copy]]
-platform=localhost
-script = "cp -rn $CYLC_WORKFLOW_RUN_DIR/events/. $CYLC_WORKFLOW_SHARE_DIR/"
-
-{% for simulation in weak_test %}
-[[VM<weak_test={{simulation['cores']}}>]]
-        [[[environment]]]
-        EVENT_SHARE="${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
-        NX="{{simulation['nx']}}"
-        NY="{{simulation['ny']}}"
-        NZ="{{simulation['nz']}}"
-{% endfor %}
-
+    platform = localhost
+    script = "cp -rn $CYLC_WORKFLOW_RUN_DIR/events/. $CYLC_WORKFLOW_SHARE_DIR/"
 
 # TODO: Set the scaling parameters by family like:
 # https://cylc.github.io/cylc-doc/stable/html/user-guide/examples/external-data-files/index.html#:~:text=%7B%23%20Define%20a%20family%20for%20each%20weather%20station%20%23%7D
 
-{% for simulation in weak_test %}
-[[SW4_WEAK<weak_test={{simulation['cores']}}>]]
-        [[[directives]]]
-        --ntasks={{simulation['cores']}}
-        --nodes={{simulation['nodes']}}
-        --time=01:00:00
-        [[[environment]]]
-        SW4="SET_SW4_HERE"
-        NX="{{simulation['nx']}}"
-        NY="{{simulation['ny']}}"
-        NZ="{{simulation['nz']}}"
-
-{% endfor %}
-
-{% for simulation in strong_test %}
+{% for simulation in strong_test[:2] %}
 [[SW4_STRONG<strong_test={{simulation['cores']}}>]]
         [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
-        --time=01:00:00
+        --time=02:00:00
         [[[environment]]]
-        SW4="SET_SW4_HERE"
+        SW4="/nesi/project/nesi00213/tools/sw4"
 {% endfor %}
-
-[[sw4_weak_scaling<weak_test>]]
-    pre-script = "module purge && module load openmpi/4.1.5-gcc"
-    script = """
-    sed -e "s;NX;${NX};g" \
-        -e "s;NY;${NY};g" \
-        -e "s;NZ;${NZ};g" \
-        $CYLC_WORKFLOW_SHARE_DIR/input_weak.in > ${PWD}/input.in
-    mpirun $SW4_WEAK ${PWD}/input.in
-    """
-    inherit = SW4_WEAK<weak_test>
-
 
 [[sw4_strong_scaling<strong_test>]]
     pre-script = "module purge && module load openmpi/4.1.5-gcc"
