@@ -2,7 +2,7 @@
 #SBATCH --job-name=sw4_strong_8
 #SBATCH --account=nesi00213
 #SBATCH --ntasks=8
-#SBATCH --mem=8G
+#SBATCH --mem-per-cpu=2G
 #SBATCH --time=00:30:00
 #SBATCH --output=sw4_strong_8_%j.out
 #SBATCH --error=sw4_strong_8_%j.err
