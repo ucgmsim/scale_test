@@ -2,112 +2,152 @@
 {% from "load_data" import load_data %}
 
 [meta]
-      title = SW4 Scale Test
-      description = """SW4 Scale Test
+    title = SW4 Scale Test (smoke)
+    description = """SW4 Scale Test smoke workflow.
 
-      This workflow can be executed on any HPC cluster or local machine with cylc installed. To do this:
+    Exercises the Cylc workflow mechanics for both weak and strong SW4
+    scaling at very small simulation sizes so that Slurm picks jobs up
+    quickly. Designed to run on NeSI Mahuika.
 
-      1. Clone the repository or download the output archive to your machine in `~/cylc-src/simulation_database'.
-      2. Install cylc: https://cylc.github.io/cylc-doc/stable/html/installation.html
-      3. Update the platform and paths indicated below to change the location of the data files.
-         - To define a platform for your cluster use: https://cylc.github.io/cylc-doc/stable/html/reference/config/writing-platform-configs.html.
-         - To run on your own computer, set the platform to "localhost". No other configuration is required.
-      4. Start the workflow: `cylc vip scale_test`.
-      5. Interact with the running workflow with `cylc tui`.
-      6. Timing results will show up in the cylc `db` file in the `log` folder.
+    To run:
+      1. Clone this repo to /nesi/project/nesi00213/sw4_scale_tests/ on
+         Mahuika (the clone name is `scale_test`).
+      2. Set CYLC_CONF_PATH to the repo's cylc/ dir (see cylc/global.cylc).
+      3. cylc vip flow
 
-      Dependencies
-      ------------
-      - Cylc (https://cylc.github.io)
-      - Apptainer (https://apptainer.org/)
-      """
+    Timing results land in the Cylc sqlite db at <run-dir>/log/db.
 
-{% set weak_test = load_data('weak_scaling.csv') %}
+    Dependencies
+    ------------
+    - Cylc (https://cylc.github.io)
+    - SW4 binary at /nesi/project/nesi00213/tools/sw4
+    """
+
+{% set weak_test   = load_data('weak_scaling.csv') %}
 {% set strong_test = load_data('strong_scaling.csv') %}
 
 [task parameters]
-    weak_test = {{ weak_test | map(attribute='cores') | join(', ') }}
+    weak_test   = {{ weak_test   | map(attribute='cores') | join(', ') }}
     strong_test = {{ strong_test | map(attribute='cores') | join(', ') }}
+
 [scheduling]
     [[graph]]
-    # NOTE: suceeded and fail for sw4 must both be optional if both execution paths are used
+    # NOTE: succeeded and fail for sw4 must both be optional if both
+    # execution paths are used.
         R1 = """
         sw4_weak_scaling<weak_test>
         sw4_strong_scaling<strong_test>
         """
     [[queues]]
         [[[all]]]
-                limit = 5
-                members = root
+            limit = 5
+            members = root
 
 [runtime]
 [[root]]
-    platform = barcelona
-    [[[environment]]]
-    CONTAINER = "${CYLC_WORKFLOW_RUN_DIR}/runner.sif"
+    platform = mahuika
     [[[directives]]]
-    --qos=gp_resa
-    --account=cant1
-    
+        --account=nesi00213
+
 [[SW4]]
-
-# TODO: Set the generate velocity model cores and mem
-[[copy]]
-platform=localhost
-script = "cp -rn $CYLC_WORKFLOW_RUN_DIR/events/. $CYLC_WORKFLOW_SHARE_DIR/"
-
-{% for simulation in weak_test %}
-[[VM<weak_test={{simulation['cores']}}>]]
-        [[[environment]]]
-        EVENT_SHARE="${CYLC_WORKFLOW_SHARE_DIR}/weak_%(weak_test)s"
-        NX="{{simulation['nx']}}"
-        NY="{{simulation['ny']}}"
-        NZ="{{simulation['nz']}}"
-{% endfor %}
-
-
-# TODO: Set the scaling parameters by family like:
-# https://cylc.github.io/cylc-doc/stable/html/user-guide/examples/external-data-files/index.html#:~:text=%7B%23%20Define%20a%20family%20for%20each%20weather%20station%20%23%7D
+    # Shared family: module loads, SW4 binary path, and the default
+    # mem request for every SW4 task (weak and strong).
+    pre-script = """
+        module purge
+        module load \
+            NeSI/zen3 \
+            rclone/1.62.2 \
+            GCCcore/12.3.0 \
+            zlib/1.2.13-GCCcore-12.3.0 \
+            binutils/2.40-GCCcore-12.3.0 \
+            GCC/12.3.0 \
+            numactl/2.0.16-GCCcore-12.3.0 \
+            UCX/1.18.1-GCCcore-12.3.0 \
+            UCC/1.3.0-GCCcore-12.3.0 \
+            OpenMPI/4.1.5-GCC-12.3.0 \
+            OpenBLAS/0.3.23-GCC-12.3.0 \
+            FlexiBLAS/3.3.1-GCC-12.3.0 \
+            FFTW/3.3.10-GCC-12.3.0 \
+            gompi/2023a \
+            FFTW.MPI/3.3.10-gompi-2023a \
+            ScaLAPACK/2.2.0-gompi-2023a-fb \
+            foss/2023a \
+            bzip2/1.0.8-GCCcore-12.3.0 \
+            XZ/5.4.2-GCCcore-12.3.0 \
+            libpng/1.6.40-GCCcore-12.3.0 \
+            freetype/2.13.2-GCCcore-12.3.0 \
+            Szip/2.1.1-GCCcore-12.3.0 \
+            HDF5/1.14.3-gompi-2023a \
+            libjpeg-turbo/2.1.5.1-GCCcore-12.3.0 \
+            ncurses/6.4-GCCcore-12.3.0 \
+            libreadline/8.2-GCCcore-12.3.0 \
+            libxml2/2.11.4-GCCcore-12.3.0 \
+            libxslt/1.1.38-GCCcore-12.3.0 \
+            OpenSSL/1.1 \
+            cURL/8.3.0-GCCcore-12.3.0 \
+            zstd/1.5.5-GCCcore-12.3.0 \
+            netCDF/4.9.2-gompi-2023a \
+            SQLite/3.42.0-GCCcore-12.3.0 \
+            Tcl/8.6.10-GCCcore-12.3.0 \
+            Tk/8.6.10-GCCcore-12.3.0 \
+            ZeroMQ/4.3.5-GCCcore-12.3.0 \
+            Python/3.11.6-foss-2023a \
+            PCRE2/10.42-GCCcore-12.3.0 \
+            json-c/0.17-GCC-12.3.0 \
+            expat/2.5.0-GCCcore-12.3.0 \
+            OpenJPEG/2.5.0-GCCcore-12.3.0 \
+            KEALib/1.5.2-gompi-2023a \
+            LibTIFF/4.5.1-GCCcore-12.3.0 \
+            PROJ/9.3.0-GCC-12.3.0 \
+            libgeotiff/1.7.1-GCC-12.3.0-PROJ-9.3.0 \
+            lz4/1.9.4-GCCcore-12.3.0 \
+            snappy/1.1.10-GCCcore-12.3.0 \
+            Arrow/14.0.1-GCC-12.3.0 \
+            libKML/1.3.0.2017-GCC-12.3.0 \
+            GDAL/3.6.4-gompi-2023a \
+            GEOS/3.11.3-GCC-12.3.0 \
+            GMT/6.6.0-foss-2023a
+    """
+    [[[directives]]]
+        --mem-per-cpu=512M
+    [[[environment]]]
+        SW4       = "/nesi/project/nesi00213/tools/sw4"
+        INPUT_DIR = "${CYLC_WORKFLOW_RUN_DIR}/events"
 
 {% for simulation in weak_test %}
 [[SW4_WEAK<weak_test={{simulation['cores']}}>]]
-        [[[directives]]]
+    inherit = SW4
+    [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
-        --time=01:00:00
-        [[[environment]]]
-        SW4="SET_SW4_HERE"
-        NX="{{simulation['nx']}}"
-        NY="{{simulation['ny']}}"
-        NZ="{{simulation['nz']}}"
-
+        --time=00:15:00
+    [[[environment]]]
+        NX = "{{simulation['nx']}}"
+        NY = "{{simulation['ny']}}"
+        NZ = "{{simulation['nz']}}"
 {% endfor %}
 
 {% for simulation in strong_test %}
 [[SW4_STRONG<strong_test={{simulation['cores']}}>]]
-        [[[directives]]]
+    inherit = SW4
+    [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
-        --time=01:00:00
-        [[[environment]]]
-        SW4="SET_SW4_HERE"
+        --time=00:15:00
 {% endfor %}
 
 [[sw4_weak_scaling<weak_test>]]
-    pre-script = "module purge && module load openmpi/4.1.5-gcc"
+    inherit = SW4_WEAK<weak_test>
     script = """
     sed -e "s;NX;${NX};g" \
         -e "s;NY;${NY};g" \
         -e "s;NZ;${NZ};g" \
-        $CYLC_WORKFLOW_SHARE_DIR/input_weak.in > ${PWD}/input.in
-    mpirun $SW4_WEAK ${PWD}/input.in
+        ${INPUT_DIR}/input_weak.in > ${PWD}/input.in
+    mpirun $SW4 ${PWD}/input.in
     """
-    inherit = SW4_WEAK<weak_test>
-
 
 [[sw4_strong_scaling<strong_test>]]
-    pre-script = "module purge && module load openmpi/4.1.5-gcc"
-    script = """
-    mpirun $SW4 $CYLC_WORKFLOW_SHARE_DIR/input_strong.in
-    """
     inherit = SW4_STRONG<strong_test>
+    script = """
+    mpirun $SW4 ${INPUT_DIR}/input_strong.in
+    """
