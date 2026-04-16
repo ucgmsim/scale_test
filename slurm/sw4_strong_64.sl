@@ -3,6 +3,7 @@
 #SBATCH --account=nesi00213
 #SBATCH --ntasks=64
 #SBATCH --nodes=1
+#SBATCH --mem=64G
 #SBATCH --time=00:30:00
 #SBATCH --output=sw4_strong_64_%j.out
 #SBATCH --error=sw4_strong_64_%j.err
