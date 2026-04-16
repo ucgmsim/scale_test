@@ -114,9 +114,27 @@
         SW4       = "/nesi/project/nesi00213/tools/sw4"
         INPUT_DIR = "${CYLC_WORKFLOW_RUN_DIR}/events"
 
-{% for simulation in weak_test %}
-[[SW4_WEAK<weak_test={{simulation['cores']}}>]]
+[[sw4_weak_scaling<weak_test>]]
     inherit = SW4
+    script = """
+    sed -e "s;NX;${NX};g" \
+        -e "s;NY;${NY};g" \
+        -e "s;NZ;${NZ};g" \
+        ${INPUT_DIR}/input_weak.in > ${PWD}/input.in
+    srun $SW4 ${PWD}/input.in
+    """
+
+[[sw4_strong_scaling<strong_test>]]
+    inherit = SW4
+    script = """
+    srun $SW4 ${INPUT_DIR}/input_strong.in
+    """
+
+# Per-value specializations: --ntasks/--nodes/--time (and NX/NY/NZ for weak)
+# get set per parameter value. Cylc merges these with the generic task
+# definitions above.
+{% for simulation in weak_test %}
+[[sw4_weak_scaling<weak_test={{simulation['cores']}}>]]
     [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
@@ -128,26 +146,9 @@
 {% endfor %}
 
 {% for simulation in strong_test %}
-[[SW4_STRONG<strong_test={{simulation['cores']}}>]]
-    inherit = SW4
+[[sw4_strong_scaling<strong_test={{simulation['cores']}}>]]
     [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
         --time=00:15:00
 {% endfor %}
-
-[[sw4_weak_scaling<weak_test>]]
-    inherit = SW4_WEAK<weak_test>
-    script = """
-    sed -e "s;NX;${NX};g" \
-        -e "s;NY;${NY};g" \
-        -e "s;NZ;${NZ};g" \
-        ${INPUT_DIR}/input_weak.in > ${PWD}/input.in
-    mpirun $SW4 ${PWD}/input.in
-    """
-
-[[sw4_strong_scaling<strong_test>]]
-    inherit = SW4_STRONG<strong_test>
-    script = """
-    mpirun $SW4 ${INPUT_DIR}/input_strong.in
-    """
