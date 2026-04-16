@@ -63,6 +63,6 @@ module load \
     GMT/6.6.0-foss-2023a
 
 SW4="/nesi/project/nesi00213/tools/sw4"
-INPUT="/nesi/project/nesi00213/scale_test/flow/events/input_strong.in"
+INPUT="/nesi/project/nesi00213/sw4_scale_tests/scale_test_repo/scale_test/flow/events/input_strong.in"
 
 mpirun $SW4 $INPUT
