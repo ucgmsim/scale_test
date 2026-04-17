@@ -138,7 +138,7 @@
     [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
-        --time=00:15:00
+        --time=00:30:00
     [[[environment]]]
         NX = "{{simulation['nx']}}"
         NY = "{{simulation['ny']}}"
@@ -150,5 +150,5 @@
     [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
-        --time=00:15:00
+        --time=00:30:00
 {% endfor %}
