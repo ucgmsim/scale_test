@@ -1,6 +1,7 @@
-# Add this to ~/.bashrc so Cylc can find this global config file.
-# export CYLC_CONF_PATH=/nesi/project/nesi00213/sw4_scale_tests/scale_test/cylc
-# Then run: source ~/.bashrc
+# Setup: merge cylc/bashrc.example into your ~/.bashrc on NeSI Mahuika,
+# then `source ~/.bashrc`. bashrc.example sets CYLC_CONF_PATH to this
+# directory so Cylc can find this global config file, plus the other
+# environment bits required for the workflow (rclone, cylc_venv, etc.).
 
 [platforms]
     [[mahuika]]

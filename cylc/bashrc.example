@@ -1,0 +1,44 @@
+# Minimal additions to ~/.bashrc required to run the SW4 scale-test Cylc
+# workflow on NeSI Mahuika. Merge these into your own .bashrc (or use this
+# file verbatim on a fresh Mahuika account).
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+    . /etc/bashrc
+fi
+
+# Group-writable by default so other nesi00213 members can collaborate on
+# files created under /nesi/project/nesi00213/.
+umask 0002
+
+# rclone is needed for uploading results; Cylc tasks purge and reload their
+# own module stack, so nothing else needs to be loaded globally.
+if [[ $(hostname) == mahuika* ]] || [[ $HOSTNAME == wb* ]]; then
+    module add rclone/1.54.0
+else
+    module add rclone
+fi
+
+# Tell Cylc where to find this repo's global.cylc.
+export CYLC_CONF_PATH=/nesi/project/nesi00213/sw4_scale_tests/scale_test/cylc
+
+# CYLC_RUN_DIR must remain unset so every Cylc-generated job script defaults
+# to $HOME/cylc-run (the location cylc install creates). A legacy venv
+# activate script on this system was once seen exporting a stale value,
+# which silently broke every Slurm job — this unset is a belt-and-braces
+# guard against that class of regression reappearing.
+unset CYLC_RUN_DIR
+
+# Activate the Cylc Python venv. Defined as a function (not an alias) so it
+# also works if invoked from a non-interactive shell.
+unalias act_cylc_venv 2>/dev/null
+act_cylc_venv() {
+    deactivate 2>/dev/null
+    source /nesi/project/nesi00213/sw4_scale_tests/cylc_venv/bin/activate
+}
+
+# Auto-activate only in interactive shells — Slurm batch jobs manage their
+# own module/venv environment.
+case $- in
+    *i*) act_cylc_venv ;;
+esac
