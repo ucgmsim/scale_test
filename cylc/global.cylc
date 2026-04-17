@@ -7,6 +7,10 @@
         hosts = localhost
         job runner = slurm
         install target = localhost
+        # Fast polling so the smoke test picks up Slurm state promptly.
+        # Production (full-scale) runs should use longer intervals.
+        submission polling intervals = PT15S, PT30S, PT1M
+        execution polling intervals  = PT15S, PT30S, PT1M
 
 [install]
     source dirs = /nesi/project/nesi00213/sw4_scale_tests/scale_test/cylc/cylc-src
