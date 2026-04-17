@@ -2,12 +2,15 @@
 {% from "load_data" import load_data %}
 
 [meta]
-    title = SW4 Scale Test (smoke)
-    description = """SW4 Scale Test smoke workflow.
+    title = SW4 Scale Test (full)
+    description = """SW4 Scale Test full workflow.
 
-    Exercises the Cylc workflow mechanics for both weak and strong SW4
-    scaling at very small simulation sizes so that Slurm picks jobs up
-    quickly. Designed to run on NeSI Mahuika.
+    Runs weak and strong SW4 scaling sweeps on NeSI Mahuika's genoa
+    partition (AMD EPYC 9654, 336 cores/node, ~1.09 GB/core). Weak
+    scaling sweeps 64-2048 cores at ~7.2 M cells/core (fits
+    --mem-per-cpu=1G with headroom). Strong scaling sweeps
+    128-2048 cores on a fixed 128 × 2688 × 2688 grid
+    (~925 M cells, anchored to the weak cores=128 row).
 
     To run:
       1. Clone this repo to /nesi/project/nesi00213/sw4_scale_tests/ on
@@ -109,7 +112,8 @@
             GMT/6.6.0-foss-2023a
     """
     [[[directives]]]
-        --mem-per-cpu=512M
+        --partition=genoa
+        --mem-per-cpu=1G
     [[[environment]]]
         SW4       = "/nesi/project/nesi00213/tools/sw4"
         INPUT_DIR = "${CYLC_WORKFLOW_RUN_DIR}/events"
@@ -138,7 +142,7 @@
     [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
-        --time=00:30:00
+        --time=05:00:00
     [[[environment]]]
         NX = "{{simulation['nx']}}"
         NY = "{{simulation['ny']}}"
@@ -150,5 +154,5 @@
     [[[directives]]]
         --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
-        --time=00:30:00
+        --time=05:00:00
 {% endfor %}
