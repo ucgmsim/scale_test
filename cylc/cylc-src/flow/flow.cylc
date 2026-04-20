@@ -2,15 +2,15 @@
 {% from "load_data" import load_data %}
 
 [meta]
-    title = SW4 Scale Test (full)
-    description = """SW4 Scale Test full workflow.
+    title = SW4 Scale Test (cross-HPC)
+    description = """SW4 Scale Test full workflow (cross-HPC layout).
 
-    Runs weak and strong SW4 scaling sweeps on NeSI Mahuika's genoa
-    partition (AMD EPYC 9654, 336 cores/node, ~1.09 GB/core). Weak
-    scaling sweeps 64-2048 cores at ~7.2 M cells/core (fits
-    --mem-per-cpu=1G with headroom). Strong scaling sweeps
-    128-2048 cores on a fixed 128 × 2688 × 2688 grid
-    (~925 M cells, anchored to the weak cores=128 row).
+    Runs weak and strong SW4 scaling sweeps at a fixed 126 tasks per
+    node — the lowest common denominator across the target HPCs (NeSI
+    Mahuika genoa/milan, Cascade, RCH) — so results are directly
+    comparable across machines. Sweeps 126, 252, 378, 504 cores (1-4
+    nodes) at ~12 M cells/core. Strong grid is 128 × 3440 × 3440
+    (~1.5 B cells), anchored to the weak cores=126 row.
 
     To run:
       1. Clone this repo to /nesi/project/nesi00213/sw4_scale_tests/ on
@@ -113,7 +113,8 @@
     """
     [[[directives]]]
         --partition=genoa
-        --mem-per-cpu=1G
+        --mem-per-cpu=2500M
+        --ntasks-per-node=126
     [[[environment]]]
         SW4       = "/nesi/project/nesi00213/tools/sw4"
         INPUT_DIR = "${CYLC_WORKFLOW_RUN_DIR}/events"
@@ -140,9 +141,8 @@
 {% for simulation in weak_test %}
 [[sw4_weak_scaling<weak_test={{simulation['cores']}}>]]
     [[[directives]]]
-        --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
-        --time=05:00:00
+        --time=12:00:00
     [[[environment]]]
         NX = "{{simulation['nx']}}"
         NY = "{{simulation['ny']}}"
@@ -152,7 +152,6 @@
 {% for simulation in strong_test %}
 [[sw4_strong_scaling<strong_test={{simulation['cores']}}>]]
     [[[directives]]]
-        --ntasks={{simulation['cores']}}
         --nodes={{simulation['nodes']}}
-        --time=05:00:00
+        --time=12:00:00
 {% endfor %}
