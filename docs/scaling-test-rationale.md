@@ -167,7 +167,7 @@ ny ≈ √(1.008 B / 128) ≈ 2806
 Rounded to **nx=128, ny=2808, nz=2808** (total 1.009 B cells). At
 cores=126 that's ~8.01 M cells/core ≈ 2.08 GB/task ✓.
 
-## Walltime: `--time=12:00:00`
+## Walltime: `--time=06:00:00`
 
 The first-run `strong_test504` task completed 1000 time steps in ~4500 s
 on 504 cores at 3 M cells/core — back-calculated throughput
@@ -187,10 +187,13 @@ per weak row:
 | 500 k (pessimistic) | 4.4 h |
 | 300 k (very pessimistic) | 7.4 h |
 
-**12 h** gives meaningful headroom even under very pessimistic assumptions.
-Slurm only charges elapsed time, so over-requesting wall-clock is
-essentially free apart from slightly longer queue waits under Slurm's
-backfill scheduler.
+**6 h** gives ~36% headroom over the pessimistic 500 k case and ~82% over
+the measured 667 k — tight enough for the Slurm backfill scheduler to
+pick the jobs up quickly, with enough margin that we don't clip under
+realistic throughput. A much larger reservation (e.g. 12 h) is "free" in
+terms of core-hours charged but costs queue latency under backfill. If
+throughput turns out ≪ 500 k we fall back to knob #2 below (halve
+`time steps`) rather than growing the walltime.
 
 ## Rough cost estimate
 
