@@ -1,4 +1,4 @@
-grid nx=128 ny=2808 nz=2808 h=100.0 lon=172.0 lat=-43.0 az=0.1 proj=tmerc datum=WGS84 lat_p=-43.0 lon_p=173 scale=0.9996
+grid nx=128 ny=1984 nz=1984 h=100.0 lon=172.0 lat=-43.0 az=0.1 proj=tmerc datum=WGS84 lat_p=-43.0 lon_p=173 scale=0.9996
 
 block vp=1.7320508076e+03 vs=1000 rho=1500 qp=100.0 qs=50.0
 

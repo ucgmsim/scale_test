@@ -48,7 +48,7 @@ larger, so the node counts match everywhere. Core-count list becomes:
 Four data points across a 4× range — narrower than one normally wants, but
 fixed by the cross-HPC node-count ceiling.
 
-## Memory per task: ~8 M cells/core, `--mem-per-cpu=2500M`
+## Memory per task: ~4 M cells/core, `--mem-per-cpu=2500M`
 
 Memory per task available at 126/node on each machine:
 
@@ -66,57 +66,67 @@ Genoa is the memory bottleneck at ~2.84 GB/task. We set
 still fits genoa (~333 GiB usable/node) with ~26 GiB headroom, and is a
 trivial fraction of every other machine's per-node memory.
 
-### Why 8 M cells/core (after first-run OOM at 12 M)
+### Calibrated memory model (from first two runs)
 
-Our first attempt used 12 M cells/core. Every `weak_test126` and
-`strong_test126` task OOM-killed a few steps in. The `--mem-per-cpu=2500M`
-budget (2.621 × 10⁹ B decimal = 2.44 GiB) divided by 12 × 10⁶ cells gives
-a per-cell ceiling of ~218 B just to OOM — and with SW4 + MPI runtime
-overhead on the order of 100 MiB per rank, the actual
-SW4-with-attenuation memory is **~220-260 B/cell**, notably worse than the
-190-200 B/cell textbook estimate (30 floats of state + ~18 attenuation
-memory variables per 3-SLS cell).
+The first run tried 12 M cells/core → OOM across the board. The second
+tried 8 M cells/core → also OOM across the board, though strong runs at
+lower cells/core (≤4 M) succeeded. Fitting `MaxRSS = A + B × cells_per_rank`
+to the three successful runs' `sacct` data:
 
-Dropping to **8 M cells/core** at the same `--mem-per-cpu=2500M` budget:
+| Run | cells/core | MaxRSS |
+|---|---|---|
+| strong_test252 | 4.00 M | 2.17 GiB |
+| strong_test378 | 2.67 M | 1.57 GiB |
+| strong_test504 | 2.00 M | 1.22 GiB |
 
-- 8 × 10⁶ × 260 B ≈ 2.08 GiB/task payload
-- + ~100 MiB overhead ≈ 2.18 GiB/task total
-- ~10% headroom inside the 2.44 GiB budget
+gives a clean linear fit (residuals <2%):
 
-We hold the budget at 2500M rather than relaxing to 3G because 3G × 126 =
-378 GiB/node requested vs ~333 GiB usable on genoa — overflows.
+```
+memory_per_task ≈ ~270 MiB + ~510 B × cells_per_task
+```
+
+This is notably higher than the textbook estimate (120 B/cell unattenuated
++ 72 B/cell for 3-SLS attenuation ≈ 192 B/cell). The ~510 B/cell figure
+includes finite-difference time-step buffers, ghost/halo cells, and
+intermediate work arrays — typical for a 3-D FD code. The ~270 MiB
+per-rank overhead covers OpenMPI + UCX buffers and SW4 runtime state.
+
+### Why 4 M cells/core
+
+Predicted OOM threshold from the calibrated model:
+`(2560 MiB − 270) / 510 B ≈ 4.7 M cells/core`. Sitting at 4 M leaves
+~11% headroom against the 2500M budget (predicted MaxRSS 2.17 GiB,
+measured 2.17 GiB at strong_test252) — thin but observationally
+validated.
 
 ### Rule of thumb: SW4-with-attenuation memory footprint
 
-Combining the OOM lower bound (>210 B/cell) with the theoretical estimate
-(~120 B/cell unattenuated + ~72 B/cell for 3-SLS attenuation), a working
-estimate for sizing future SW4 jobs with `attenuation` enabled:
+For sizing future SW4 jobs with 3-SLS `attenuation` enabled (the SW4
+default):
 
 ```
-memory_per_task ≈ 250 B × (nx·ny·nz / n_tasks)  +  ~100 MiB overhead
+memory_per_task ≈ 510 B × (nx·ny·nz / n_tasks)  +  ~270 MiB overhead
 ```
 
-The 250 B/cell figure sits at the upper end of the 220-260 B/cell range
-our data is consistent with, i.e. it's deliberately conservative for
-sizing. The ~100 MiB overhead covers MPI buffers and SW4 runtime state
-per rank. Caveats: only valid with 3-SLS `attenuation` on (the SW4
-default); non-attenuated runs drop to ~120 B/cell. PML/supergrid boundary
-layers, topography, or richer material models add more. The successful
-`strong_test504` run at 3 M cells/core (well below OOM) means our upper
-bound is loose — a deliberate run closer to the OOM edge would tighten
-the factor.
+Derived from `MaxRSS` of the three successful `strong_test*` runs at
+2-4 M cells/core on genoa, fit to a two-parameter linear model. Caveats:
+non-attenuated runs drop to ~120 B/cell for the main state (overhead
+term probably similar). PML/supergrid layers, topography, or richer
+material models would add more. Coefficients might differ on a different
+HPC (different OpenMPI/UCX version, different NUMA topology).
 
-### Alternatives considered
+### Alternatives considered (and why rejected)
 
-- **~7 M cells/core at `--mem-per-cpu=1G`**: matches what a fully-packed
-  (every core active) production run would see. But since our 126/node
-  layout leaves most node memory idle anyway, there's no point shrinking
-  further than needed.
-- **~12 M cells/core at `--mem-per-cpu=2500M`**: our original pick;
-  OOM-killed on the first run. Rejected.
-- **~15-20 M cells/core at `--mem-per-cpu=3G`**: uses more of the
-  available memory. On genoa, 126 × 3 G = 378 GiB/node requested vs ~333
-  GiB usable — overflows. Rejected.
+- **~12 M cells/core at `--mem-per-cpu=2500M`**: first-run pick. Every
+  weak_test126/strong_test126 OOM-killed. Rejected.
+- **~8 M cells/core at `--mem-per-cpu=2500M`**: second-run pick. Every
+  weak task and strong_test126 OOM-killed; strong runs at ≥252 cores
+  (≤4 M cells/core) succeeded. Rejected.
+- **~15-20 M cells/core at `--mem-per-cpu=3G`**: 126 × 3G = 378 GiB/node
+  requested vs ~333 GiB usable on genoa — overflows. Rejected.
+- **Bumping `--mem-per-cpu` 2500M → 2700-2800M to keep 8 M cells/core**:
+  2800M × 126 = 352.8 GiB/node requested — exceeds genoa's ~333 GiB
+  usable. Rejected on cross-HPC portability grounds.
 
 ## Core counts: 126, 252, 378, 504
 
@@ -156,59 +166,52 @@ than that aesthetic.
 
 ### Grid numbers
 
-The weak cores=126 row is `1420 × 1420 × 500` ≈ 1.008 B cells. Applying
+The weak cores=126 row is `1000 × 1000 × 500` = 500 M cells. Applying
 Jake's reshape with nx=128:
 
 ```
-128 × ny² ≈ 1.008 B
-ny ≈ √(1.008 B / 128) ≈ 2806
+128 × ny² ≈ 500 M
+ny ≈ √(500 M / 128) ≈ 1976
 ```
 
-Rounded to **nx=128, ny=2808, nz=2808** (total 1.009 B cells). At
-cores=126 that's ~8.01 M cells/core ≈ 2.08 GB/task ✓.
+Rounded to **nx=128, ny=1984, nz=1984** (total 503.8 M cells). At
+cores=126 that's ~4.00 M cells/core; predicted MaxRSS ~2.17 GiB,
+~11% under the 2500M budget.
 
-## Walltime: `--time=06:00:00`
+## Walltime: `--time=03:00:00`
 
-The first-run `strong_test504` task completed 1000 time steps in ~4500 s
-on 504 cores at 3 M cells/core — back-calculated throughput
-**≈ 667 k cell-steps/core/s** on genoa. That sits between the smoke-test
-800 k (tiny cache-resident grids) and the 500 k realistic guess, and is
-now our anchor data point. Throughput is memory-bandwidth-bound at this
-working-set size (~2 GiB/rank ≫ L3), with attenuation state adding extra
-traffic per step.
+Measured throughput across the three successful second-run strong tests
+was **635-685 k cell-steps/core/s** on genoa (per-core figure drops
+slightly with more cores — expected strong-scaling communication
+overhead).
 
-At 1000 time steps and 8 M cells/core (current target), expected runtime
-per weak row:
+At 1000 time steps and 4 M cells/core, expected runtime per weak row:
 
 | Throughput | Runtime |
 |---|---|
-| 800 k (smoke, optimistic) | 2.8 h |
-| 667 k (measured at 3 M cells/core) | 3.3 h |
-| 500 k (pessimistic) | 4.4 h |
-| 300 k (very pessimistic) | 7.4 h |
+| 685 k (best observed, 252-core) | 1.62 h |
+| 635 k (worst observed, 504-core) | 1.75 h |
+| 500 k (pessimistic) | 2.22 h |
+| 300 k (very pessimistic) | 3.70 h |
 
-**6 h** gives ~36% headroom over the pessimistic 500 k case and ~82% over
-the measured 667 k — tight enough for the Slurm backfill scheduler to
-pick the jobs up quickly, with enough margin that we don't clip under
-realistic throughput. A much larger reservation (e.g. 12 h) is "free" in
-terms of core-hours charged but costs queue latency under backfill. If
-throughput turns out ≪ 500 k we fall back to knob #2 below (halve
-`time steps`) rather than growing the walltime.
+**3 h** gives ~35% headroom over the 500 k pessimistic case, stays well
+inside the Slurm backfill-friendly window, and is still above the very
+pessimistic 3.70 h figure in all but the worst case. If throughput
+disappoints further, fall back to knob #2 below (halve `time steps`)
+rather than growing the walltime.
 
 ## Rough cost estimate
 
-Ideal scaling (reality will be worse). Using measured 667 k c-s/c/s
-(realistic) and 500 k (pessimistic):
+Using best-observed (685 k) and pessimistic (500 k) throughputs:
 
 - **Weak**: Σ cores × runtime
-  - 667 k: (126+252+378+504) × 3.3 h ≈ 4 200 core-h
-  - 500 k: (126+252+378+504) × 4.4 h ≈ 5 600 core-h
+  - 685 k: (126+252+378+504) × 1.62 h ≈ 2 040 core-h
+  - 500 k: (126+252+378+504) × 2.22 h ≈ 2 800 core-h
 - **Strong**: 4 × (total cells × steps / throughput_per_core)
-  - 667 k: 4 × 420 core-h ≈ 1 700 core-h
-  - 500 k: 4 × 560 core-h ≈ 2 200 core-h
-- **Total**: ≈ 5 900 core-h realistic, ≈ 7 800 core-h pessimistic. On
-  genoa at 126/node (37.5% packed) that's ~47-62 node-hours per HPC.
-  Comfortably inside partition capacity either way.
+  - 685 k: 4 × 204 core-h ≈ 820 core-h
+  - 500 k: 4 × 280 core-h ≈ 1 120 core-h
+- **Total**: ≈ 2 860 core-h best case, ≈ 3 920 core-h pessimistic. On
+  genoa at 126/node (37.5% packed) that's ~23-31 node-hours per HPC.
 
 ## Per-HPC adaptation notes
 
@@ -226,16 +229,16 @@ carry over to every HPC unchanged.
 
 ## Knobs if things go wrong
 
-Further diagnostics, cheapest-to-apply first (the first-run OOM at 12 M
-cells/core has already been addressed by dropping to 8 M):
+Further diagnostics, cheapest-to-apply first (the first two runs' OOMs at
+12 M and 8 M cells/core have been addressed by dropping to 4 M and
+calibrating the memory model from `sacct MaxRSS`):
 
-1. **Jobs still OOM at 8 M cells/core**: per-cell memory is even higher
-   than the 220-260 B/cell bound we derived. Drop cells/core to 6 M
-   (edit the CSVs) — don't bump `--mem-per-cpu` further, as 2500M is
-   already close to genoa's per-node ceiling at 126/node.
-2. **Jobs hit the 12 h walltime limit**: throughput is well below our
-   measured 667 k cell-steps/core/s. Drop `time steps=500` in
-   `input_*.in` (halves runtime; still enough steps to see scaling).
+1. **Jobs still OOM at 4 M cells/core**: per-rank overhead is higher than
+   the ~270 MiB we fitted, or per-cell is >~510 B. Drop cells/core to 3 M
+   (edit the CSVs).
+2. **Jobs hit the 3 h walltime limit**: throughput is well below our
+   measured 500-685 k range. Drop `time steps=500` in `input_*.in`
+   (halves runtime; still enough steps to see scaling).
 3. **Submission rejected with "Requested node configuration is not
    available"**: probably a QOS or partition-specific task-per-node / total
    CPU cap. Check `sacctmgr show qos` and try adding `--qos=normal` to the
