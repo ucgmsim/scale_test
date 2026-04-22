@@ -78,30 +78,48 @@ def plot_scaling(data: list[tuple[str, int, float]], out_path: Path) -> None:
         subset = sorted((c, t) for k, c, t in data if k == kind)
         ax.set_title(title)
         ax.set_xlabel("MPI ranks (cores)")
-        ax.set_ylabel("Wall-clock runtime (s)")
         ax.grid(True, alpha=0.3)
 
         if not subset:
+            ax.set_ylabel(
+                "Wall-clock runtime (h)" if kind == "strong"
+                else "Runtime ratio (measured / ideal)"
+            )
             ax.text(0.5, 0.5, f"no {kind} data", ha="center", va="center",
                     transform=ax.transAxes)
             continue
 
         cores, times = zip(*subset)
-        ax.plot(cores, times, "o-", label="measured")
+        base_c, base_t = cores[0], times[0]
 
-        if kind == "strong" and len(subset) >= 2:
-            # Ideal strong-scaling reference: T(N) = T(1) / N
-            t1 = times[0]
-            ideal = [t1 / c for c in cores]
-            ax.plot(cores, ideal, "k--", alpha=0.5, label=f"ideal T(1)/N = {t1:.0f}/N")
+        if kind == "strong":
+            hours = [t / 3600.0 for t in times]
+            ax.set_ylabel("Wall-clock runtime (h)")
+            ax.plot(cores, hours, "o-", label="measured")
+            if len(subset) >= 2:
+                ideal_hours = [base_t * base_c / c / 3600.0 for c in cores]
+                ax.plot(cores, ideal_hours, "k--", alpha=0.5,
+                        label=r"ideal: $T(N) = T(N_0) \cdot N_0 / N$")
+            ax.legend()
+        else:  # weak
+            ratios = [t / base_t for t in times]
+            ax.set_ylabel("Runtime ratio (measured / ideal)")
+            ax.plot(cores, ratios, "o-", label="measured / ideal")
+            ax.axhline(1.0, ls="--", color="k", alpha=0.5,
+                       label=r"ideal: $T(N) / T(N_0) = 1$")
             ax.legend()
 
-        for c, t in subset:
-            ax.annotate(f"{t:.0f}s", (c, t), textcoords="offset points", xytext=(5, 5))
-
-        ax.set_xscale("log", base=2)
         ax.set_xticks(cores)
         ax.set_xticklabels([str(c) for c in cores])
+
+        # Secondary x-axis (top) in nodes, with 126 cores per node.
+        secax = ax.secondary_xaxis(
+            "top",
+            functions=(lambda x: x / 126.0, lambda x: x * 126.0),
+        )
+        secax.set_xticks([c // 126 for c in cores])
+        secax.set_xticklabels([str(c // 126) for c in cores])
+        secax.set_xlabel("Nodes (126 cores/node)")
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=120)
