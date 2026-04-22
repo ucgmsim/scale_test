@@ -112,7 +112,8 @@
             GMT/6.6.0-foss-2023a
     """
     [[[directives]]]
-        --partition=genoa
+        --partition=milan
+        --hint=nomultithread
         --mem-per-cpu=2500M
         --ntasks-per-node=126
     [[[environment]]]
