@@ -3,7 +3,7 @@
 
 {# -------------------------------------------------------------------------
    Target HPC. Pick at install time:   cylc vip flow --set HPC=<name>
-   Supported values: 'mahuika-milan' (default), 'rch'.
+   Supported values: 'mahuika-milan' (default), 'mahuika-genoa', 'rch'.
    Each entry below sets the per-HPC bits; everything else (grid sizing,
    core counts, walltime, the graph) is shared.
    ------------------------------------------------------------------------- #}
@@ -13,6 +13,16 @@
     {% set PLATFORM    = 'mahuika' %}
     {% set ACCOUNT     = 'nesi00213' %}
     {% set PARTITION   = 'milan' %}
+    {% set SMT_HINT    = 'nomultithread' %}
+    {% set MEM_PER_CPU = '2500M' %}
+    {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
+{% elif HPC == 'mahuika-genoa' %}
+    {# Same as mahuika-milan apart from --partition. SMT is off at BIOS
+       on genoa, so --hint=nomultithread is a harmless no-op kept for
+       symmetry with the milan block. #}
+    {% set PLATFORM    = 'mahuika' %}
+    {% set ACCOUNT     = 'nesi00213' %}
+    {% set PARTITION   = 'genoa' %}
     {% set SMT_HINT    = 'nomultithread' %}
     {% set MEM_PER_CPU = '2500M' %}
     {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
@@ -41,7 +51,7 @@
       1. Clone this repo onto the target HPC under a project-visible path.
          On Mahuika: /nesi/project/nesi00213/sw4_scale_tests/scale_test.
       2. Set CYLC_CONF_PATH to the repo's cylc/ dir (see cylc/global.cylc).
-      3. cylc vip flow --set HPC=<mahuika-milan|rch>
+      3. cylc vip flow --set HPC=<mahuika-milan|mahuika-genoa|rch>
          (HPC defaults to 'mahuika-milan' if omitted.)
 
     Timing results land in the Cylc sqlite db at <run-dir>/log/db.
@@ -83,7 +93,7 @@
     # mem request for every SW4 task (weak and strong). The module
     # block and binary path are per-HPC (set at the top of this file).
     pre-script = """
-{% if HPC == 'mahuika-milan' %}
+{% if HPC in ('mahuika-milan', 'mahuika-genoa') %}
         module purge
         module load \
             NeSI/zen3 \
