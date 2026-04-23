@@ -29,13 +29,19 @@ denominator across the machines we target:
 | NeSI milan | 128 | Can host 126/node (2 cores idle) |
 | NeSI genoa | 336 | Can host 126/node (210 cores idle) |
 | Cascade (standard pool) | 384 | Can host 126/node (258 cores idle) |
-| RCH n01-n04 | 128 | Can host 126/node (2 cores idle) |
-| RCH n09-n12, n16-n17 | 128 | Can host 126/node (2 cores idle) |
-| RCH n05-n08 | 64 | **Cannot** host 126/node — excluded |
+| RCH `hcpu` (n01-n04) | 144 | Can host 126/node (18 cores idle) |
+| RCH `hcpu,mem` (n09-n12, n16-n17) | 144 | Can host 126/node (18 cores idle) |
+| RCH `hcpu,mem` (n18-n19) | 192 | Can host 126/node (66 cores idle) |
+| RCH `mem` (n05-n08) | 72 | **Cannot** host 126/node — excluded |
+| RCH `gpu` (n13-n15) | 36 | **Cannot** host 126/node — excluded |
+| RCH `cloud` (c01-c10) | 64 | **Cannot** host 126/node — excluded |
 
-So we pin `--ntasks-per-node=126` everywhere. On genoa / Cascade this leaves
-the majority of each node's cores idle, which is wasteful but unavoidable
-for comparability.
+So we pin `--ntasks-per-node=126` everywhere. On genoa / Cascade / RCH this
+leaves the majority of each node's cores idle, which is wasteful but
+unavoidable for comparability. On RCH we additionally use
+`--constraint=hcpu` to steer Slurm away from the 72-core `mem` nodes,
+36-core `gpu` nodes, and 64-core `cloud` nodes — all of which are tagged
+with the `hcpu` feature absent.
 
 ### Practical node ceiling
 
@@ -58,8 +64,8 @@ Memory per task available at 126/node on each machine:
 | **NeSI genoa** | **~358 GB** | **~2.84 GB (bottleneck)** |
 | Cascade standard | 755 GB | ~5.99 GB |
 | Cascade high-mem | 1511 GB | ~11.99 GB |
-| RCH n01-n04 | 590 GB | ~4.68 GB |
-| RCH n09-n12, n16-n17 | 885 GB | ~7.02 GB |
+| RCH `hcpu` (n01-n04) | 604 GB (MemTotal) | ~4.79 GB |
+| RCH `hcpu,mem` (n09-n12, n16-n19) | 906 GB | ~7.19 GB |
 
 Genoa is the memory bottleneck at ~2.84 GB/task. We set
 `--mem-per-cpu=2500M` (= 2.44 GiB per task = 307 GiB/node at 126 tasks);
@@ -215,17 +221,39 @@ Using best-observed (685 k) and pessimistic (500 k) throughputs:
 
 ## Per-HPC adaptation notes
 
-The `flow.cylc` currently hard-codes `--partition=genoa` — for runs on
-other HPCs, these directives need per-HPC overrides:
+The `flow.cylc` is now parameterised by a Jinja `HPC` variable — pick
+the target at install time:
 
-- **NeSI milan**: change `--partition=genoa` → `--partition=milan`. May
-  need `--hint=nomultithread` since milan has SMT.
+```
+cylc vip flow --set HPC="mahuika-milan"   # default
+cylc vip flow --set HPC="mahuika-genoa"
+cylc vip flow --set HPC="rch"
+```
+
+Each HPC entry at the top of `flow.cylc` sets `--partition`, `--account`,
+`--hint`, `--mem-per-cpu`, `--constraint` (RCH only), the module-load
+block, and the SW4 binary path. Everything else (grid sizing, core
+counts, walltime, graph) is shared.
+
+Per-target details:
+
+- **NeSI mahuika-milan / mahuika-genoa**: same module stack and account;
+  `--partition` differs. `--hint=nomultithread` is needed on milan
+  (SMT on) and a harmless no-op on genoa (SMT off at BIOS).
+- **RCH**: `--partition=short` (6h cap, covers our 5h walltime);
+  `--constraint=hcpu` to steer onto the 144+ core nodes and skip the
+  72-core `mem` / 36-core `gpu` / 64-core `cloud` pools. Module stack
+  is `prefix/2025 + foss/2024a`, matching the GCC/13.3.0 + OpenMPI/5.0.3
+  toolchain the pre-built SW4 binary at
+  `/scratch/projects/rch-quakecore/sw4/optimize_mp/sw4` was linked
+  against.
 - **Cascade**: uses PBS, not Slurm — a separate Cylc platform config and
-  directive translation is required (qsub-style `mem=`, etc.).
-- **RCH**: Slurm-based; will need RCH-specific partition / account names.
+  directive translation is required (qsub-style `mem=`, etc.). Not yet
+  implemented; would be a fourth `{% elif HPC == 'cascade' %}` block in
+  `flow.cylc` plus a new `cascade` entry in `cylc/global.cylc`.
 
-These are out of scope for this branch; the sizing choices in this doc
-carry over to every HPC unchanged.
+The sizing choices in this doc (126 tasks/node, 4 M cells/core, 5h
+walltime) carry over to every HPC unchanged.
 
 ## Knobs if things go wrong
 
@@ -236,7 +264,7 @@ calibrating the memory model from `sacct MaxRSS`):
 1. **Jobs still OOM at 4 M cells/core**: per-rank overhead is higher than
    the ~270 MiB we fitted, or per-cell is >~510 B. Drop cells/core to 3 M
    (edit the CSVs).
-2. **Jobs hit the 3 h walltime limit**: throughput is well below our
+2. **Jobs hit the 5 h walltime limit**: throughput is well below our
    measured 500-685 k range. Drop `time steps=500` in `input_*.in`
    (halves runtime; still enough steps to see scaling).
 3. **Submission rejected with "Requested node configuration is not
