@@ -1,6 +1,31 @@
 #!Jinja2
 {% from "load_data" import load_data %}
 
+{# -------------------------------------------------------------------------
+   Target HPC. Pick at install time:   cylc vip flow --set HPC=<name>
+   Supported values: 'mahuika-milan' (default), 'rch'.
+   Each entry below sets the per-HPC bits; everything else (grid sizing,
+   core counts, walltime, the graph) is shared.
+   ------------------------------------------------------------------------- #}
+{% set HPC = HPC | default('mahuika-milan') %}
+
+{% if HPC == 'mahuika-milan' %}
+    {% set PLATFORM    = 'mahuika' %}
+    {% set ACCOUNT     = 'nesi00213' %}
+    {% set PARTITION   = 'milan' %}
+    {% set SMT_HINT    = 'nomultithread' %}
+    {% set MEM_PER_CPU = '2500M' %}
+    {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
+{% elif HPC == 'rch' %}
+    {# TODO(rch): fill in once cluster details are confirmed. #}
+    {% set PLATFORM    = 'TODO' %}
+    {% set ACCOUNT     = 'TODO' %}
+    {% set PARTITION   = 'TODO' %}
+    {% set SMT_HINT    = 'TODO' %}
+    {% set MEM_PER_CPU = '2500M' %}
+    {% set SW4_BIN     = 'TODO' %}
+{% endif %}
+
 [meta]
     title = SW4 Scale Test (cross-HPC)
     description = """SW4 Scale Test full workflow (cross-HPC layout).
@@ -13,17 +38,18 @@
     (~1.5 B cells), anchored to the weak cores=126 row.
 
     To run:
-      1. Clone this repo to /nesi/project/nesi00213/sw4_scale_tests/ on
-         Mahuika (the clone name is `scale_test`).
+      1. Clone this repo onto the target HPC under a project-visible path.
+         On Mahuika: /nesi/project/nesi00213/sw4_scale_tests/scale_test.
       2. Set CYLC_CONF_PATH to the repo's cylc/ dir (see cylc/global.cylc).
-      3. cylc vip flow
+      3. cylc vip flow --set HPC=<mahuika-milan|rch>
+         (HPC defaults to 'mahuika-milan' if omitted.)
 
     Timing results land in the Cylc sqlite db at <run-dir>/log/db.
 
     Dependencies
     ------------
     - Cylc (https://cylc.github.io)
-    - SW4 binary at /nesi/project/nesi00213/tools/sw4
+    - SW4 binary (path set per-HPC above)
     """
 
 {% set weak_test   = load_data('weak_scaling.csv') %}
@@ -48,14 +74,16 @@
 
 [runtime]
 [[root]]
-    platform = mahuika
+    platform = {{ PLATFORM }}
     [[[directives]]]
-        --account=nesi00213
+        --account={{ ACCOUNT }}
 
 [[SW4]]
     # Shared family: module loads, SW4 binary path, and the default
-    # mem request for every SW4 task (weak and strong).
+    # mem request for every SW4 task (weak and strong). The module
+    # block and binary path are per-HPC (set at the top of this file).
     pre-script = """
+{% if HPC == 'mahuika-milan' %}
         module purge
         module load \
             NeSI/zen3 \
@@ -110,14 +138,21 @@
             GDAL/3.6.4-gompi-2023a \
             GEOS/3.11.3-GCC-12.3.0 \
             GMT/6.6.0-foss-2023a
+{% elif HPC == 'rch' %}
+        # TODO(rch): fill in RCH module environment for SW4 (MPI, compilers,
+        # any scientific libs SW4 was linked against). Until then, fail loud
+        # rather than silently run against the login-shell environment.
+        echo "ERROR: RCH module block not yet configured in flow.cylc" >&2
+        exit 1
+{% endif %}
     """
     [[[directives]]]
-        --partition=milan
-        --hint=nomultithread
-        --mem-per-cpu=2500M
+        --partition={{ PARTITION }}
+        --hint={{ SMT_HINT }}
+        --mem-per-cpu={{ MEM_PER_CPU }}
         --ntasks-per-node=126
     [[[environment]]]
-        SW4       = "/nesi/project/nesi00213/tools/sw4"
+        SW4       = "{{ SW4_BIN }}"
         INPUT_DIR = "${CYLC_WORKFLOW_RUN_DIR}/events"
 
 [[sw4_weak_scaling<weak_test>]]
@@ -143,7 +178,7 @@
 [[sw4_weak_scaling<weak_test={{simulation['cores']}}>]]
     [[[directives]]]
         --nodes={{simulation['nodes']}}
-        --time=10:00:00
+        --time=05:00:00
     [[[environment]]]
         NX = "{{simulation['nx']}}"
         NY = "{{simulation['ny']}}"
@@ -154,5 +189,5 @@
 [[sw4_strong_scaling<strong_test={{simulation['cores']}}>]]
     [[[directives]]]
         --nodes={{simulation['nodes']}}
-        --time=10:00:00
+        --time=05:00:00
 {% endfor %}
