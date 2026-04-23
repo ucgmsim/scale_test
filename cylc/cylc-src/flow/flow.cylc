@@ -16,6 +16,7 @@
     {% set SMT_HINT    = 'nomultithread' %}
     {% set MEM_PER_CPU = '2500M' %}
     {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
+    {% set CONSTRAINT  = '' %}
 {% elif HPC == 'mahuika-genoa' %}
     {# Same as mahuika-milan apart from --partition. SMT is off at BIOS
        on genoa, so --hint=nomultithread is a harmless no-op kept for
@@ -26,14 +27,20 @@
     {% set SMT_HINT    = 'nomultithread' %}
     {% set MEM_PER_CPU = '2500M' %}
     {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
+    {% set CONSTRAINT  = '' %}
 {% elif HPC == 'rch' %}
-    {# TODO(rch): fill in once cluster details are confirmed. #}
-    {% set PLATFORM    = 'TODO' %}
-    {% set ACCOUNT     = 'TODO' %}
-    {% set PARTITION   = 'TODO' %}
-    {% set SMT_HINT    = 'TODO' %}
+    {# RCH has three node classes: hcpu (144-192 cores), mem (72 cores,
+       cannot host 126 tasks/node), and gpu (36 cores). --constraint=hcpu
+       steers jobs onto the n01-n04, n09-n12, n16-n19 pool. 'short' has a
+       6h walltime — covers our 5h budget with headroom. SMT is off at
+       BIOS (ThreadsPerCore=1), so the hint is a no-op kept for symmetry. #}
+    {% set PLATFORM    = 'rch' %}
+    {% set ACCOUNT     = 'rch-quakecore' %}
+    {% set PARTITION   = 'short' %}
+    {% set SMT_HINT    = 'nomultithread' %}
     {% set MEM_PER_CPU = '2500M' %}
-    {% set SW4_BIN     = 'TODO' %}
+    {% set SW4_BIN     = '/scratch/projects/rch-quakecore/sw4/optimize_mp/sw4' %}
+    {% set CONSTRAINT  = 'hcpu' %}
 {% endif %}
 
 [meta]
@@ -149,11 +156,9 @@
             GEOS/3.11.3-GCC-12.3.0 \
             GMT/6.6.0-foss-2023a
 {% elif HPC == 'rch' %}
-        # TODO(rch): fill in RCH module environment for SW4 (MPI, compilers,
-        # any scientific libs SW4 was linked against). Until then, fail loud
-        # rather than silently run against the login-shell environment.
-        echo "ERROR: RCH module block not yet configured in flow.cylc" >&2
-        exit 1
+        module purge
+        module load prefix/2025
+        module load foss/2024a
 {% endif %}
     """
     [[[directives]]]
@@ -161,6 +166,9 @@
         --hint={{ SMT_HINT }}
         --mem-per-cpu={{ MEM_PER_CPU }}
         --ntasks-per-node=126
+{% if CONSTRAINT %}
+        --constraint={{ CONSTRAINT }}
+{% endif %}
     [[[environment]]]
         SW4       = "{{ SW4_BIN }}"
         INPUT_DIR = "${CYLC_WORKFLOW_RUN_DIR}/events"

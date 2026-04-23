@@ -1,0 +1,26 @@
+# Minimal additions to ~/.bashrc required to run the SW4 scale-test Cylc
+# workflow on the RCH cluster. Merge these into your own .bashrc.
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+    . /etc/bashrc
+fi
+
+# Group-writable by default so other rch-quakecore members can collaborate
+# on files created under /scratch/projects/rch-quakecore/.
+umask 0002
+
+# Tell Cylc where to find this repo's global.cylc, and expose the repo
+# path to global.cylc's [install] section via ${SCALE_TEST_ROOT}.
+export SCALE_TEST_ROOT=/scratch/projects/rch-quakecore/sw4_scale_tests/scale_test
+export CYLC_CONF_PATH=$SCALE_TEST_ROOT/cylc
+
+# CYLC_RUN_DIR must remain unset so every Cylc-generated job script defaults
+# to $HOME/cylc-run (the location cylc install creates). See the equivalent
+# note in bashrc.example — a stale CYLC_RUN_DIR silently breaks every Slurm
+# job, so we belt-and-braces unset it here too.
+unset CYLC_RUN_DIR
+
+# Cylc is assumed to already be available on PATH on RCH (installed
+# system-wide). If a site-specific venv or module is needed, add it here
+# by analogy with bashrc.example's act_cylc_venv function on Mahuika.

@@ -19,8 +19,11 @@ else
     module add rclone
 fi
 
-# Tell Cylc where to find this repo's global.cylc.
-export CYLC_CONF_PATH=/nesi/project/nesi00213/sw4_scale_tests/scale_test/cylc
+# Tell Cylc where to find this repo (global.cylc lives inside, and
+# [install] in global.cylc expands ${SCALE_TEST_ROOT} to locate the
+# workflow source + symlink target directories).
+export SCALE_TEST_ROOT=/nesi/project/nesi00213/sw4_scale_tests/scale_test
+export CYLC_CONF_PATH=$SCALE_TEST_ROOT/cylc
 
 # CYLC_RUN_DIR must remain unset so every Cylc-generated job script defaults
 # to $HOME/cylc-run (the location cylc install creates). A legacy venv

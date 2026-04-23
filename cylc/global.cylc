@@ -1,7 +1,7 @@
-# Setup: merge cylc/bashrc.example into your ~/.bashrc on NeSI Mahuika,
-# then `source ~/.bashrc`. bashrc.example sets CYLC_CONF_PATH to this
-# directory so Cylc can find this global config file, plus the other
-# environment bits required for the workflow (rclone, cylc_venv, etc.).
+# Setup: merge the matching cylc/bashrc{,-rch}.example into your ~/.bashrc
+# on the target HPC, then `source ~/.bashrc`. The bashrc file sets
+# CYLC_CONF_PATH so Cylc finds this file, plus SCALE_TEST_ROOT so the
+# [install] paths below resolve to the repo on disk.
 
 [platforms]
     [[mahuika]]
@@ -12,9 +12,15 @@
         # Production (full-scale) runs should use longer intervals.
         submission polling intervals = PT15S, PT30S, PT1M
         execution polling intervals  = PT15S, PT30S, PT1M
+    [[rch]]
+        hosts = localhost
+        job runner = slurm
+        install target = localhost
+        submission polling intervals = PT15S, PT30S, PT1M
+        execution polling intervals  = PT15S, PT30S, PT1M
 
 [install]
-    source dirs = /nesi/project/nesi00213/sw4_scale_tests/scale_test/cylc/cylc-src
+    source dirs = ${SCALE_TEST_ROOT}/cylc/cylc-src
     [[symlink dirs]]
         [[[localhost]]]
-            run = /nesi/project/nesi00213/sw4_scale_tests/scale_test/cylc
+            run = ${SCALE_TEST_ROOT}/cylc
