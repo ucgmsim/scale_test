@@ -143,7 +143,7 @@
 [[sw4_weak_scaling<weak_test={{simulation['cores']}}>]]
     [[[directives]]]
         --nodes={{simulation['nodes']}}
-        --time=05:00:00
+        --time=10:00:00
     [[[environment]]]
         NX = "{{simulation['nx']}}"
         NY = "{{simulation['ny']}}"
@@ -154,5 +154,5 @@
 [[sw4_strong_scaling<strong_test={{simulation['cores']}}>]]
     [[[directives]]]
         --nodes={{simulation['nodes']}}
-        --time=05:00:00
+        --time=10:00:00
 {% endfor %}
