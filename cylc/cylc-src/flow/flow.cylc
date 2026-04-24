@@ -159,6 +159,13 @@
         module purge
         module load prefix/2025
         module load foss/2024a
+        # The shared SW4 binary at /scratch/projects/rch-quakecore/sw4/optimize_mp/sw4
+        # was linked against GCC 13.3.0's libstdc++ but its RUNPATH only covers
+        # OpenBLAS and OpenMPI — not GCCcore. EasyBuild modules on RCH don't
+        # populate LD_LIBRARY_PATH, so without this the loader falls back to the
+        # system /shared/prefix2025/usr/lib/gcc/.../11/libstdc++.so.6 (GCC 11)
+        # and fails with `GLIBCXX_3.4.32 not found`.
+        export LD_LIBRARY_PATH="${EBROOTGCCCORE}/lib64:${LD_LIBRARY_PATH}"
 {% endif %}
     """
     [[[directives]]]
