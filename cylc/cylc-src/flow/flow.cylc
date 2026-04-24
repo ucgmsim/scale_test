@@ -165,7 +165,7 @@
         # populate LD_LIBRARY_PATH, so without this the loader falls back to the
         # system /shared/prefix2025/usr/lib/gcc/.../11/libstdc++.so.6 (GCC 11)
         # and fails with `GLIBCXX_3.4.32 not found`.
-        export LD_LIBRARY_PATH="${EBROOTGCCCORE}/lib64:${LD_LIBRARY_PATH}"
+        export LD_LIBRARY_PATH="${EBROOTGCCCORE}/lib64:${LD_LIBRARY_PATH:-}"
 {% endif %}
     """
     [[[directives]]]
