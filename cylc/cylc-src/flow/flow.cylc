@@ -17,6 +17,7 @@
     {% set MEM_PER_CPU = '2500M' %}
     {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
     {% set CONSTRAINT  = '' %}
+    {% set EXCLUDE     = '' %}
 {% elif HPC == 'mahuika-genoa' %}
     {# Same as mahuika-milan apart from --partition. SMT is off at BIOS
        on genoa, so --hint=nomultithread is a harmless no-op kept for
@@ -28,6 +29,7 @@
     {% set MEM_PER_CPU = '2500M' %}
     {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
     {% set CONSTRAINT  = '' %}
+    {% set EXCLUDE     = '' %}
 {% elif HPC == 'rch' %}
     {# RCH has three node classes: hcpu (144-192 cores), mem (72 cores,
        cannot host 126 tasks/node), and gpu (36 cores). --constraint=hcpu
@@ -41,6 +43,8 @@
     {% set MEM_PER_CPU = '2500M' %}
     {% set SW4_BIN     = '/scratch/projects/rch-quakecore/sw4/optimize_mp/sw4' %}
     {% set CONSTRAINT  = 'hcpu' %}
+    {# n03 has a known cylc-incompatibility — exclude it from allocations. #}
+    {% set EXCLUDE     = 'n03' %}
 {% endif %}
 
 [meta]
@@ -168,6 +172,9 @@
         --ntasks-per-node=126
 {% if CONSTRAINT %}
         --constraint={{ CONSTRAINT }}
+{% endif %}
+{% if EXCLUDE %}
+        --exclude={{ EXCLUDE }}
 {% endif %}
     [[[environment]]]
         SW4       = "{{ SW4_BIN }}"
