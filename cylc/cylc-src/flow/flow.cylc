@@ -251,7 +251,7 @@
         --nodes={{simulation['nodes']}}
         --time=05:00:00
 {% elif JOB_RUNNER == 'pbs' %}
-        -l select = {{simulation['nodes']}}:ncpus=384:mpiprocs=126:mem=720gb
+        -l select = {{simulation['nodes']}}:ncpus=384:mpiprocs=126:mem=320gb
         -l place = excl
         -l walltime = 05:00:00
 {% endif %}
@@ -268,7 +268,7 @@
         --nodes={{simulation['nodes']}}
         --time=05:00:00
 {% elif JOB_RUNNER == 'pbs' %}
-        -l select = {{simulation['nodes']}}:ncpus=384:mpiprocs=126:mem=720gb
+        -l select = {{simulation['nodes']}}:ncpus=384:mpiprocs=126:mem=320gb
         -l place = excl
         -l walltime = 05:00:00
 {% endif %}
