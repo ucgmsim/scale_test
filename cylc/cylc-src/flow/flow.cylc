@@ -57,10 +57,13 @@
     {# Cascade (UoC RCC) uses PBS Pro on AMD Zen4 Genoa nodes
        (2x EPYC 9654 = 192 physical cores / 384 with SMT, 2 NUMA nodes,
        ~740 GB DRAM). 'shortq' has a 48h walltime cap — covers our 5h
-       budget. We grab the whole node via place=excl so SMT siblings
-       aren't co-scheduled with us, and run 126 MPI ranks per node for
-       cross-HPC comparability. SW4 is spack-built and fully RPATH-
-       resolved, so no module loads are needed in the pre-script. #}
+       budget. We request ncpus=384 per chunk, which claims every
+       logical cpu on a node and de-facto excludes other jobs. 126
+       MPI ranks per node for cross-HPC comparability. mem=320gb
+       mirrors the Slurm --mem-per-cpu=2500M x 126 budget. SW4 is
+       spack-built (Intel oneAPI MPI 2021.16) — the SW4 binary itself
+       is RPATH-resolved, but mpirun and cylc need explicit setup in
+       the pre-script (see [[SW4]] below). #}
     {% set PLATFORM    = 'cascade' %}
     {% set ACCOUNT     = 'uoc40001' %}
     {% set QUEUE       = 'shortq' %}
@@ -252,7 +255,6 @@
         --time=05:00:00
 {% elif JOB_RUNNER == 'pbs' %}
         -l select = {{simulation['nodes']}}:ncpus=384:mpiprocs=126:mem=320gb
-        -l place = excl
         -l walltime = 05:00:00
 {% endif %}
     [[[environment]]]
@@ -269,7 +271,6 @@
         --time=05:00:00
 {% elif JOB_RUNNER == 'pbs' %}
         -l select = {{simulation['nodes']}}:ncpus=384:mpiprocs=126:mem=320gb
-        -l place = excl
         -l walltime = 05:00:00
 {% endif %}
 {% endfor %}
