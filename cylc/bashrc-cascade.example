@@ -30,7 +30,7 @@ export CYLC_CONF_PATH=$SCALE_TEST_ROOT/cylc
 
 # CYLC_RUN_DIR must remain unset so every Cylc-generated job script defaults
 # to $HOME/cylc-run (the location cylc install creates). See the equivalent
-# note in bashrc.example — a stale CYLC_RUN_DIR silently breaks every job,
+# note in bashrc-nesi.example — a stale CYLC_RUN_DIR silently breaks every job,
 # so we belt-and-braces unset it here too.
 unset CYLC_RUN_DIR
 

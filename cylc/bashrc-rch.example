@@ -17,10 +17,10 @@ export CYLC_CONF_PATH=$SCALE_TEST_ROOT/cylc
 
 # CYLC_RUN_DIR must remain unset so every Cylc-generated job script defaults
 # to $HOME/cylc-run (the location cylc install creates). See the equivalent
-# note in bashrc.example — a stale CYLC_RUN_DIR silently breaks every Slurm
+# note in bashrc-nesi.example — a stale CYLC_RUN_DIR silently breaks every Slurm
 # job, so we belt-and-braces unset it here too.
 unset CYLC_RUN_DIR
 
 # Cylc is assumed to already be available on PATH on RCH (installed
 # system-wide). If a site-specific venv or module is needed, add it here
-# by analogy with bashrc.example's act_cylc_venv function on Mahuika.
+# by analogy with bashrc-nesi.example's act_cylc_venv function on Mahuika.
