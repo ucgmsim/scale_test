@@ -193,9 +193,10 @@
         # PBS batch shells don't run the interactive parts of ~/.bashrc,
         # so neither the cylc venv (needed for status callbacks like
         # `cylc message`) nor Intel MPI (mpirun) end up on PATH. Set
-        # both up explicitly here. SW4 itself is RPATH-resolved, so
-        # nothing else is required.
-        source /uoc/project/uoc40001/profile.bash
+        # both up explicitly here. SW4 itself is RPATH-resolved against
+        # this same Intel MPI install, so once mpirun is on PATH and
+        # cylc is on PATH everything else just works.
+        source /uoc/project/uoc40001/spack/opt/spack/linux-zen4/intel-oneapi-mpi-2021.16.1-hmbnpmv2nbllkpu5s7s2onvvgvssae3p/mpi/2021.16/env/vars.sh
         source /uoc/project/uoc40001/sw4_scale_tests/cylc_venv/bin/activate
 {% endif %}
     """
