@@ -190,8 +190,13 @@
         module load prefix/2025
         module load foss/2024a
 {% elif HPC == 'cascade' %}
-        # SW4 is spack-built with full RPATH self-resolution — no
-        # module loads needed.
+        # PBS batch shells don't run the interactive parts of ~/.bashrc,
+        # so neither the cylc venv (needed for status callbacks like
+        # `cylc message`) nor Intel MPI (mpirun) end up on PATH. Set
+        # both up explicitly here. SW4 itself is RPATH-resolved, so
+        # nothing else is required.
+        source /uoc/project/uoc40001/profile.bash
+        source /uoc/project/uoc40001/sw4_scale_tests/cylc_venv/bin/activate
 {% endif %}
     """
     [[[directives]]]
