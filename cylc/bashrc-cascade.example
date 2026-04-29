@@ -42,12 +42,6 @@ act_cylc_venv() {
     source /uoc/project/uoc40001/sw4_scale_tests/cylc_venv/bin/activate
 }
 
-# Auto-activate only in interactive shells — PBS batch jobs manage their
-# own environment.
-case $- in
-    *i*) act_cylc_venv ;;
-esac
-
 # User specific aliases and functions
 if [ -d ~/.bashrc.d ]; then
     for rc in ~/.bashrc.d/*; do
@@ -58,3 +52,11 @@ if [ -d ~/.bashrc.d ]; then
 fi
 
 unset rc
+
+# Auto-activate the Cylc venv only in interactive shells — PBS batch jobs
+# manage their own environment. Done last so nothing in profile.bash,
+# /etc/bashrc, or ~/.bashrc.d/* can clobber the activate script's PS1
+# modification (which is what adds the "(cylc_venv)" prompt prefix).
+case $- in
+    *i*) act_cylc_venv ;;
+esac
