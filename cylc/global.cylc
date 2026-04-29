@@ -22,6 +22,11 @@
         hosts = localhost
         job runner = pbs
         install target = localhost
+        # cylc is in a venv that PBS batch shells don't auto-activate;
+        # this puts it on PATH for the bookkeeping callbacks at the
+        # start and end of every job script (which run before any
+        # user pre-script and so can't be fixed there).
+        cylc path = /uoc/project/uoc40001/sw4_scale_tests/cylc_venv/bin
         submission polling intervals = PT15S, PT30S, PT1M
         execution polling intervals  = PT15S, PT30S, PT1M
 
