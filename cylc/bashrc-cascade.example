@@ -1,0 +1,60 @@
+# Drop-in ~/.bashrc for running the SW4 scale-test Cylc workflow on the
+# UoC RCC Cascade cluster (PBS Pro). Replace your ~/.bashrc with this
+# file (or merge the SW4-specific bits into your existing one).
+
+# .bashrc
+alias qstat='qstat -w'
+
+source /uoc/project/uoc40001/profile.bash
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+    . /etc/bashrc
+fi
+
+# User specific environment
+if ! [[ "$PATH" =~ "$HOME/.local/bin:$HOME/bin:" ]]
+then
+    PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+fi
+export PATH
+
+# Group-writable by default so other uoc40001 members can collaborate on
+# files created under /uoc/project/uoc40001/.
+umask 0002
+
+# Tell Cylc where to find this repo's global.cylc, and expose the repo
+# path to global.cylc's [install] section via ${SCALE_TEST_ROOT}.
+export SCALE_TEST_ROOT=/uoc/project/uoc40001/sw4_scale_tests/scale_test
+export CYLC_CONF_PATH=$SCALE_TEST_ROOT/cylc
+
+# CYLC_RUN_DIR must remain unset so every Cylc-generated job script defaults
+# to $HOME/cylc-run (the location cylc install creates). See the equivalent
+# note in bashrc.example — a stale CYLC_RUN_DIR silently breaks every job,
+# so we belt-and-braces unset it here too.
+unset CYLC_RUN_DIR
+
+# Activate the Cylc Python venv. Defined as a function (not an alias) so it
+# also works if invoked from a non-interactive shell.
+unalias act_cylc_venv 2>/dev/null
+act_cylc_venv() {
+    deactivate 2>/dev/null
+    source /uoc/project/uoc40001/sw4_scale_tests/cylc_venv/bin/activate
+}
+
+# Auto-activate only in interactive shells — PBS batch jobs manage their
+# own environment.
+case $- in
+    *i*) act_cylc_venv ;;
+esac
+
+# User specific aliases and functions
+if [ -d ~/.bashrc.d ]; then
+    for rc in ~/.bashrc.d/*; do
+        if [ -f "$rc" ]; then
+            . "$rc"
+        fi
+    done
+fi
+
+unset rc
