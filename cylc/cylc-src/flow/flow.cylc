@@ -197,10 +197,16 @@
         # so neither the cylc venv (needed for status callbacks like
         # `cylc message`) nor Intel MPI (mpirun) end up on PATH. Set
         # both up explicitly here. SW4 itself is RPATH-resolved against
-        # this same Intel MPI install, so once mpirun is on PATH and
-        # cylc is on PATH everything else just works.
+        # this same Intel MPI install.
         source /uoc/project/uoc40001/spack/opt/spack/linux-zen4/intel-oneapi-mpi-2021.16.1-hmbnpmv2nbllkpu5s7s2onvvgvssae3p/mpi/2021.16/env/vars.sh
         source /uoc/project/uoc40001/sw4_scale_tests/cylc_venv/bin/activate
+        # Pure-MPI run: 126 ranks/node already saturates the cpus, so
+        # any per-rank OpenMP/BLAS threading is pure oversubscription.
+        # Without this, OpenBLAS auto-detects 384 threads per rank ->
+        # ~48k threads/node -> thread stacks alone blow past the cgroup
+        # memory limit and every rank gets SIGKILL'd before SW4 starts.
+        export OMP_NUM_THREADS=1
+        export OPENBLAS_NUM_THREADS=1
 {% endif %}
     """
     [[[directives]]]
