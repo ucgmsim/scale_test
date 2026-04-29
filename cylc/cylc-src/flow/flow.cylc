@@ -2,7 +2,12 @@
 {% from "load_data" import load_data %}
 
 {# -------------------------------------------------------------------------
-   Target HPC. Pick at install time:   cylc vip flow --set HPC=<name>
+   Target HPC. Pick at install time:
+       cylc vip flow --set 'HPC="<name>"'
+   The inner double quotes are required: cylc's --set evaluates the RHS as
+   a Python literal, so bare identifiers like `cascade` get parsed as
+   names and rejected. Hyphenated values (`mahuika-genoa`) happen to fall
+   back to strings, but the quoted form is correct in all cases.
    Supported values: 'mahuika-milan' (default), 'mahuika-genoa', 'rch',
    'cascade'. Each entry below sets the per-HPC bits; everything else
    (grid sizing, core counts, walltime, the graph) is shared.
@@ -78,7 +83,7 @@
       1. Clone this repo onto the target HPC under a project-visible path.
          On Mahuika: /nesi/project/nesi00213/sw4_scale_tests/scale_test.
       2. Set CYLC_CONF_PATH to the repo's cylc/ dir (see cylc/global.cylc).
-      3. cylc vip flow --set HPC=<mahuika-milan|mahuika-genoa|rch|cascade>
+      3. cylc vip flow --set 'HPC="<mahuika-milan|mahuika-genoa|rch|cascade>"'
          (HPC defaults to 'mahuika-milan' if omitted.)
 
     Timing results land in the Cylc sqlite db at <run-dir>/log/db.
