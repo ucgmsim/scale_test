@@ -18,6 +18,12 @@
         install target = localhost
         submission polling intervals = PT15S, PT30S, PT1M
         execution polling intervals  = PT15S, PT30S, PT1M
+    [[cascade]]
+        hosts = localhost
+        job runner = pbs
+        install target = localhost
+        submission polling intervals = PT15S, PT30S, PT1M
+        execution polling intervals  = PT15S, PT30S, PT1M
 
 [install]
     source dirs = ${SCALE_TEST_ROOT}/cylc/cylc-src

@@ -3,9 +3,9 @@
 
 {# -------------------------------------------------------------------------
    Target HPC. Pick at install time:   cylc vip flow --set HPC=<name>
-   Supported values: 'mahuika-milan' (default), 'mahuika-genoa', 'rch'.
-   Each entry below sets the per-HPC bits; everything else (grid sizing,
-   core counts, walltime, the graph) is shared.
+   Supported values: 'mahuika-milan' (default), 'mahuika-genoa', 'rch',
+   'cascade'. Each entry below sets the per-HPC bits; everything else
+   (grid sizing, core counts, walltime, the graph) is shared.
    ------------------------------------------------------------------------- #}
 {% set HPC = HPC | default('mahuika-milan') %}
 
@@ -18,6 +18,7 @@
     {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
     {% set CONSTRAINT  = '' %}
     {% set EXCLUDE     = '' %}
+    {% set JOB_RUNNER  = 'slurm' %}
 {% elif HPC == 'mahuika-genoa' %}
     {# Same as mahuika-milan apart from --partition. SMT is off at BIOS
        on genoa, so --hint=nomultithread is a harmless no-op kept for
@@ -30,6 +31,7 @@
     {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
     {% set CONSTRAINT  = '' %}
     {% set EXCLUDE     = '' %}
+    {% set JOB_RUNNER  = 'slurm' %}
 {% elif HPC == 'rch' %}
     {# RCH has three node classes: hcpu (144-192 cores), mem (72 cores,
        cannot host 126 tasks/node), and gpu (36 cores). --constraint=hcpu
@@ -45,6 +47,20 @@
     {% set CONSTRAINT  = 'hcpu' %}
     {# n03 has a known cylc-incompatibility — exclude it from allocations. #}
     {% set EXCLUDE     = 'n03' %}
+    {% set JOB_RUNNER  = 'slurm' %}
+{% elif HPC == 'cascade' %}
+    {# Cascade (UoC RCC) uses PBS Pro on AMD Zen4 Genoa nodes
+       (2x EPYC 9654 = 192 physical cores / 384 with SMT, 2 NUMA nodes,
+       ~740 GB DRAM). 'shortq' has a 48h walltime cap — covers our 5h
+       budget. We grab the whole node via place=excl so SMT siblings
+       aren't co-scheduled with us, and run 126 MPI ranks per node for
+       cross-HPC comparability. SW4 is spack-built and fully RPATH-
+       resolved, so no module loads are needed in the pre-script. #}
+    {% set PLATFORM    = 'cascade' %}
+    {% set ACCOUNT     = 'uoc40001' %}
+    {% set QUEUE       = 'shortq' %}
+    {% set SW4_BIN     = '/uoc/project/uoc40001/spack/opt/spack/linux-zen4/sw4-3.0-stl6gkqcnilzulk4jjaaimgndua6lceh/bin/sw4' %}
+    {% set JOB_RUNNER  = 'pbs' %}
 {% endif %}
 
 [meta]
@@ -62,7 +78,7 @@
       1. Clone this repo onto the target HPC under a project-visible path.
          On Mahuika: /nesi/project/nesi00213/sw4_scale_tests/scale_test.
       2. Set CYLC_CONF_PATH to the repo's cylc/ dir (see cylc/global.cylc).
-      3. cylc vip flow --set HPC=<mahuika-milan|mahuika-genoa|rch>
+      3. cylc vip flow --set HPC=<mahuika-milan|mahuika-genoa|rch|cascade>
          (HPC defaults to 'mahuika-milan' if omitted.)
 
     Timing results land in the Cylc sqlite db at <run-dir>/log/db.
@@ -97,7 +113,12 @@
 [[root]]
     platform = {{ PLATFORM }}
     [[[directives]]]
+{% if JOB_RUNNER == 'slurm' %}
         --account={{ ACCOUNT }}
+{% elif JOB_RUNNER == 'pbs' %}
+        -A = {{ ACCOUNT }}
+        -q = {{ QUEUE }}
+{% endif %}
 
 [[SW4]]
     # Shared family: module loads, SW4 binary path, and the default
@@ -163,9 +184,13 @@
         module purge
         module load prefix/2025
         module load foss/2024a
+{% elif HPC == 'cascade' %}
+        # SW4 is spack-built with full RPATH self-resolution — no
+        # module loads needed.
 {% endif %}
     """
     [[[directives]]]
+{% if JOB_RUNNER == 'slurm' %}
         --partition={{ PARTITION }}
         --hint={{ SMT_HINT }}
         --mem-per-cpu={{ MEM_PER_CPU }}
@@ -175,6 +200,7 @@
 {% endif %}
 {% if EXCLUDE %}
         --exclude={{ EXCLUDE }}
+{% endif %}
 {% endif %}
     [[[environment]]]
         SW4       = "{{ SW4_BIN }}"
@@ -187,13 +213,21 @@
         -e "s;NY;${NY};g" \
         -e "s;NZ;${NZ};g" \
         ${INPUT_DIR}/input_weak.in > ${PWD}/input.in
+{% if JOB_RUNNER == 'slurm' %}
     srun $SW4 ${PWD}/input.in
+{% elif JOB_RUNNER == 'pbs' %}
+    mpirun $SW4 ${PWD}/input.in
+{% endif %}
     """
 
 [[sw4_strong_scaling<strong_test>]]
     inherit = SW4
     script = """
+{% if JOB_RUNNER == 'slurm' %}
     srun $SW4 ${INPUT_DIR}/input_strong.in
+{% elif JOB_RUNNER == 'pbs' %}
+    mpirun $SW4 ${INPUT_DIR}/input_strong.in
+{% endif %}
     """
 
 # Per-value specializations: --ntasks/--nodes/--time (and NX/NY/NZ for weak)
@@ -202,8 +236,14 @@
 {% for simulation in weak_test %}
 [[sw4_weak_scaling<weak_test={{simulation['cores']}}>]]
     [[[directives]]]
+{% if JOB_RUNNER == 'slurm' %}
         --nodes={{simulation['nodes']}}
         --time=05:00:00
+{% elif JOB_RUNNER == 'pbs' %}
+        -l select = {{simulation['nodes']}}:ncpus=384:mpiprocs=126
+        -l place = excl
+        -l walltime = 05:00:00
+{% endif %}
     [[[environment]]]
         NX = "{{simulation['nx']}}"
         NY = "{{simulation['ny']}}"
@@ -213,6 +253,12 @@
 {% for simulation in strong_test %}
 [[sw4_strong_scaling<strong_test={{simulation['cores']}}>]]
     [[[directives]]]
+{% if JOB_RUNNER == 'slurm' %}
         --nodes={{simulation['nodes']}}
         --time=05:00:00
+{% elif JOB_RUNNER == 'pbs' %}
+        -l select = {{simulation['nodes']}}:ncpus=384:mpiprocs=126
+        -l place = excl
+        -l walltime = 05:00:00
+{% endif %}
 {% endfor %}
