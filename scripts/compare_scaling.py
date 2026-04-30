@@ -9,8 +9,8 @@
 Companion to `plot_scaling.py`, which plots a single run. This one takes
 several labelled archives and produces a side-by-side strong / weak
 panel with one line per HPC × configuration. Throughput is normalised
-to k cell-steps per core per second so absolute lines from different
-HPCs are directly comparable.
+to cell updates per core-hour so absolute lines from different HPCs
+are directly comparable.
 
 Usage:
     ./compare_scaling.py LABEL=PATH [LABEL=PATH ...] -o overlay.png
@@ -57,7 +57,7 @@ def find_db(root: Path) -> Path:
 
 
 def load_throughputs(db: Path) -> dict[str, dict[int, float]]:
-    """Return {kind: {cores: kCS_per_core_per_s}} for successful tasks."""
+    """Return {kind: {cores: G_cell_updates_per_core_hour}} for successful tasks."""
     conn = sqlite3.connect(db)
     rows = conn.execute(
         """SELECT name, time_run, time_run_exit
@@ -73,9 +73,9 @@ def load_throughputs(db: Path) -> dict[str, dict[int, float]]:
         kind, cores = m.group(1), int(m.group(2))
         if cores in out[kind]:
             continue  # already have a successful submit for this task
-        elapsed = (parse_iso(t_exit) - parse_iso(t_run)).total_seconds()
+        elapsed_h = (parse_iso(t_exit) - parse_iso(t_run)).total_seconds() / 3600.0
         nx, ny, nz = STRONG_GRID if kind == "strong" else WEAK_GRIDS[cores]
-        out[kind][cores] = (nx * ny * nz * STEPS) / (cores * elapsed) / 1000.0
+        out[kind][cores] = (nx * ny * nz * STEPS) / (cores * elapsed_h) / 1e9
     return out
 
 
@@ -114,35 +114,54 @@ def main() -> None:
             print(f"{label:<28} {db}")
             all_data.append((label, load_throughputs(db)))
 
-    fig, (ax_s, ax_w) = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
-    panels = [("strong", ax_s, "Strong scaling: fixed 128×1984×1984 grid"),
-              ("weak",   ax_w, "Weak scaling: ~4M cells/core")]
-    for kind, ax, title in panels:
-        ax.set_title(title)
-        ax.set_xlabel("Cores")
-        ax.set_ylabel("Throughput (k cell-steps / core / s)")
-        ax.grid(True, alpha=0.3)
-        for label, data in all_data:
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    cores_per_node = 126
+    all_cores: set[int] = set()
+    ax.set_xlabel("Nodes")
+    ax.set_ylabel("Throughput (G cell updates / core-hour)")
+    ax.grid(True, alpha=0.3)
+
+    kind_styles = {"strong": "-", "weak": "--"}
+    palette = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    for i, (label, data) in enumerate(all_data):
+        color = palette[i % len(palette)]
+        for kind, linestyle in kind_styles.items():
             d = data.get(kind, {})
             if not d:
                 continue
             cores = sorted(d.keys())
-            ax.plot(cores, [d[c] for c in cores], "o-", label=label, alpha=0.85)
-        ax.legend(fontsize=9)
+            all_cores.update(cores)
+            nodes = [c / cores_per_node for c in cores]
+            ax.plot(nodes, [d[c] for c in cores],
+                    marker="o", linestyle=linestyle, color=color,
+                    label=f"{label} ({kind})", alpha=0.85)
+    ax.legend(fontsize=9, loc="upper right")
+
+    cores_sorted = sorted(all_cores)
+    ax.set_xticks([c / cores_per_node for c in cores_sorted])
+    ax.set_xticklabels([str(c // cores_per_node) for c in cores_sorted])
+
+    secax = ax.secondary_xaxis(
+        "top",
+        functions=(lambda x: x * cores_per_node, lambda x: x / cores_per_node),
+    )
+    secax.set_xticks(cores_sorted)
+    secax.set_xticklabels([str(c) for c in cores_sorted])
+    secax.set_xlabel(f"Cores ({cores_per_node} cores/node)")
 
     fig.tight_layout()
     fig.savefig(args.output, dpi=130)
     print(f"\nwrote {args.output}")
 
-    print(f"\n{'archive':<28} {'kind':<6} {'mean':>5}  range          n")
+    print(f"\n{'archive':<28} {'kind':<6} {'mean':>5}  range            n  (G cell updates / core-hour)")
     for label, data in all_data:
         for kind in ("strong", "weak"):
             d = data.get(kind, {})
             if not d:
                 continue
             mean = sum(d.values()) / len(d)
-            print(f"{label:<28} {kind:<6} {mean:>5.0f}  "
-                  f"{min(d.values()):.0f}-{max(d.values()):.0f}  ({len(d)})")
+            print(f"{label:<28} {kind:<6} {mean:>5.2f}  "
+                  f"{min(d.values()):.2f}-{max(d.values()):.2f}  ({len(d)})")
 
 
 if __name__ == "__main__":
