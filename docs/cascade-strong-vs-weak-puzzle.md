@@ -69,6 +69,24 @@ Same generic SSE2 binary runs on both milan (Zen3) and genoa (Zen4).
 **Cascade SW4** — Spack-built with `target=zen4`, so Spack injects
 `-march=znver4` automatically → AVX-512.
 
+**RCH SW4** — `/scratch/projects/rch-quakecore/sw4/optimize_mp/sw4`,
+checked the same way as NeSI's binary:
+
+```
+$ objdump -d /scratch/projects/rch-quakecore/sw4/optimize_mp/sw4 | grep -c '%zmm'
+0
+$ objdump -d /scratch/projects/rch-quakecore/sw4/optimize_mp/sw4 | grep -c '%ymm'
+0
+```
+
+Same SSE2-only signature. RCH is an independently administered HPC
+(UoC, Zen3 hardware), so this is a third independent reproduction of
+the missing-`-march` build pattern — strengthening the conclusion
+that the SIMD-width gap is a build-flag effect rather than anything
+NeSI-specific. RCH's hardware caps out at AVX2 (no AVX-512 on Zen3),
+so the right rebuild target there is `-march=znver3`; see
+`rch-sw4-rebuild-recommendation.md`.
+
 The binaries differ by 4× in theoretical SIMD width (zmm: 8 doubles
 vs. xmm: 2 doubles). That single fact resolves all three
 cascade-vs-genoa anomalies:

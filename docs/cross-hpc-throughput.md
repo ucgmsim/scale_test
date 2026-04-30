@@ -176,13 +176,15 @@ The NaN scan is a trivially streaming pass: AVX-512 chews through it
 
 Because milan also runs the NeSI binary, milan's ~10 % NaN overhead
 fits the same SSE2-only story; nothing about milan's DDR4 or its
-heterogeneous nodes is needed to explain it. RCH almost certainly
-has the same SSE2-class build (we haven't measured NaN-on there),
-so the prediction is ~10 % overhead.
+heterogeneous nodes is needed to explain it. RCH's binary was checked
+the same way (`objdump -d /scratch/projects/rch-quakecore/sw4/optimize_mp/sw4`
+shows zero `%ymm` and zero `%zmm`) and has the same SSE2-only build,
+so its NaN-on overhead — when we eventually measure it — should
+land at ~10 % too.
 
-The full diagnostic chain is in `cascade-strong-vs-weak-puzzle.md`,
-and a rebuild recommendation for NeSI is in
-`nesi-sw4-rebuild-recommendation.md`.
+The full diagnostic chain is in `cascade-strong-vs-weak-puzzle.md`;
+rebuild recommendations are in `nesi-sw4-rebuild-recommendation.md`
+and `rch-sw4-rebuild-recommendation.md`.
 
 ## Bandwidth hypothesis
 
@@ -264,9 +266,12 @@ recommendation for NeSI in `nesi-sw4-rebuild-recommendation.md`.
 - **NaN checking**: cheap on cascade only (~0–3 %). On NeSI's
   genoa and milan it costs ~9–12 % because the NeSI SW4 binary
   is SSE2-only (no `-march` flag at build time), so the NaN scan
-  doesn't vectorise. RCH's binary is in the same class, so budget
-  ~10 % overhead there too. A NeSI rebuild with `-march=znver{3,4}`
-  would close this gap — see `nesi-sw4-rebuild-recommendation.md`.
+  doesn't vectorise. RCH's binary was confirmed by `objdump` to be
+  SSE2-only as well, so budget ~10 % overhead there too. NeSI
+  rebuilt with `-march=znver{3,4}` and RCH rebuilt with
+  `-march=znver3` (Zen3 — **not** znver4) would close this gap —
+  see `nesi-sw4-rebuild-recommendation.md` and
+  `rch-sw4-rebuild-recommendation.md`.
 
 ## What this still does not tell us
 
@@ -281,8 +286,8 @@ recommendation for NeSI in `nesi-sw4-rebuild-recommendation.md`.
   channel pressure) might recover much of the genoa/milan gap. We
   haven't tested it because the whole point of 126/node is
   cross-HPC comparability.
-- **NaN checks on RCH**: still untested directly. RCH almost
-  certainly runs the same SSE2-class build as NeSI, so ~10 %
+- **NaN checks on RCH**: still untested directly. RCH's binary was
+  confirmed SSE2-only by `objdump` (same as NeSI), so ~10 %
   overhead is the prediction.
 
 ## Source data
