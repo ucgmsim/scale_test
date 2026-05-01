@@ -52,7 +52,11 @@
     {% set PARTITION   = 'short' %}
     {% set SMT_HINT    = 'nomultithread' %}
     {% set MEM_PER_CPU = '2500M' %}
-    {% set SW4_BIN     = '/scratch/projects/rch-quakecore/sw4/optimize_mp/sw4' %}
+    {# Wide-SIMD rebuild (2026-05-01): -march=znver3, AVX2, GCC 13.3.0.
+       RPATH baked in for OpenMPI 5.0.3 / OpenBLAS 0.3.27 / GCCcore 13.3.0
+       so the binary is self-contained on hcpu nodes.
+       See docs/rch-sw4-rebuild-recommendation.md. #}
+    {% set SW4_BIN     = '/scratch/projects/rch-quakecore/sw4/sw4-znver3' %}
     {% set CONSTRAINT  = 'hcpu' %}
     {# n03 has a known cylc-incompatibility — exclude it from allocations. #}
     {% set EXCLUDE     = 'n03' %}
