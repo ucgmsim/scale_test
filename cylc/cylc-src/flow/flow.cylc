@@ -20,7 +20,9 @@
     {% set PARTITION   = 'milan' %}
     {% set SMT_HINT    = 'nomultithread' %}
     {% set MEM_PER_CPU = '2500M' %}
-    {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
+    {# Wide-SIMD rebuild (2026-05-01): -march=znver3, AVX2.
+       See docs/nesi-sw4-rebuild-recommendation.md. #}
+    {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4-milan' %}
     {% set CONSTRAINT  = '' %}
     {% set EXCLUDE     = '' %}
     {% set JOB_RUNNER  = 'slurm' %}
@@ -33,7 +35,9 @@
     {% set PARTITION   = 'genoa' %}
     {% set SMT_HINT    = 'nomultithread' %}
     {% set MEM_PER_CPU = '2500M' %}
-    {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4' %}
+    {# Wide-SIMD rebuild (2026-05-01): -march=znver4, AVX-512.
+       See docs/nesi-sw4-rebuild-recommendation.md. #}
+    {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4-genoa' %}
     {% set CONSTRAINT  = '' %}
     {% set EXCLUDE     = '' %}
     {% set JOB_RUNNER  = 'slurm' %}
