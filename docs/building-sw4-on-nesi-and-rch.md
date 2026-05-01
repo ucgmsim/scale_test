@@ -351,7 +351,8 @@ on SW4 specifically.
   GCC defaults to 256-bit vector width even on Zen4 because of
   historical frequency-throttling concerns inherited from Intel server
   parts. Zen4 doesn't have that issue; explicit opt-in to 512-bit can
-  add ~5–15 %. Cheap to try, trivial to back out.
+  add ~5–15 %. Cheap to try, trivial to back out. **Planned follow-up
+  experiment**: see "Pending follow-ups" below.
 
 - **Targeted numerics-relaxation flags**:
   `-fno-math-errno -fno-trapping-math` are essentially free
@@ -394,6 +395,51 @@ person to know about them so the full performance picture is clear:
   `--map-by numa --bind-to core` (or equivalent
   `srun --cpu-bind=cores`) can be worth a few percent vs. defaults,
   especially when ranks/node doesn't divide evenly across sockets.
+
+## Pending follow-ups
+
+### Genoa: add `-mprefer-vector-width=512` and measure marginal effect
+
+After the post-rebuild scaling campaign confirms `sw4-genoa` at
+`-march=znver4` delivers as predicted, build a parallel binary with
+the additional flag and measure the marginal effect on top of plain
+znver4. **Don't replace** the existing `sw4-genoa` — install
+alongside as `sw4-genoa-vw512` so the comparison is clean and the
+production binary stays untouched until we have data.
+
+Recipe (genoa only — flag is a no-op on milan/RCH which are Zen3):
+
+```bash
+# from the existing source tree, with the same NeSI/zen4 +
+# GCC 12.3.0 + OpenMPI 4.1.5 + OpenBLAS 0.3.23 toolchain loaded
+cmake -S . -B build-genoa-vw512 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_FLAGS="-march=znver4 -mprefer-vector-width=512" \
+  -DCMAKE_C_FLAGS="-march=znver4 -mprefer-vector-width=512" \
+  -DCMAKE_Fortran_FLAGS="-march=znver4 -mprefer-vector-width=512"
+cmake --build build-genoa-vw512 -j 4
+cp build-genoa-vw512/bin/sw4 /nesi/project/nesi00213/tools/sw4-genoa-vw512
+chgrp nesi00213 /nesi/project/nesi00213/tools/sw4-genoa-vw512
+chmod g+rx       /nesi/project/nesi00213/tools/sw4-genoa-vw512
+```
+
+Then a focused micro-campaign — single-node weak-126 + strong-126
+should be enough to measure the marginal effect on top of plain
+znver4. Could be done by adding a temporary `mahuika-genoa-vw512` HPC
+variant in `flow.cylc` pointing at the new binary.
+
+**Magnitude expectation**: 3–8 % on top of plain znver4 — rule of
+thumb for stencil codes, lower end likely because SW4 is partly
+memory-bandwidth-bound. Real possibility it's at the noise floor and
+not worth keeping the second binary; that's what the experiment will
+tell us.
+
+**Decision criteria**: if the micro-campaign shows ≥ 5 % on weak-126
+above plain znver4, promote `sw4-genoa-vw512` to be the canonical
+`sw4-genoa` (rename old to `sw4-genoa-noprefer`, point cylc and
+optionally the canonical `sw4` symlink at the new one). If < 5 %,
+keep `sw4-genoa` as-is and either retain `sw4-genoa-vw512` for
+science or remove it.
 
 ## Common pitfalls
 
