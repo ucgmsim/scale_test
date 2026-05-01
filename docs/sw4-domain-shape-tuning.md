@@ -8,8 +8,7 @@ CPU and memory hierarchy chew through the data. On a wide-SIMD binary
 **10–40 %** of per-core throughput on a million-core-hour campaign.
 On the current SSE2-only NeSI / RCH binaries the effect is too small
 to bother chasing — but those binaries should be rebuilt anyway, see
-`nesi-sw4-rebuild-recommendation.md` and
-`rch-sw4-rebuild-recommendation.md`.
+`building-sw4-on-nesi-and-rch.md`.
 
 This doc layers from coarse rules of thumb to the underlying mechanics
 so you can stop at whatever level of detail is useful.
@@ -280,10 +279,9 @@ work for you here than the global-grid choice would.
   where the strong/weak gap comes from.
 - `cross-hpc-findings-explained.md` — non-technical version of the
   same story.
-- `nesi-sw4-rebuild-recommendation.md`,
-  `rch-sw4-rebuild-recommendation.md` — rebuild instructions to
-  enable wide-SIMD; prerequisite for the shape lever to matter on
-  those HPCs.
+- `building-sw4-on-nesi-and-rch.md` — rebuild instructions to enable
+  wide-SIMD on both HPCs; prerequisite for the shape lever to matter
+  there.
 - SW4 source: the inner stencil loops live in the
   `rhs4*.f` Fortran kernels — look there if you need to verify which
   dim is the innermost contiguous loop on your build.

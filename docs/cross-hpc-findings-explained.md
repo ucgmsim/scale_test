@@ -2,7 +2,7 @@
 
 A non-technical companion to `cross-hpc-throughput.md`,
 `cascade-strong-vs-weak-puzzle.md`, and
-`nesi-sw4-rebuild-recommendation.md`. Same conclusions, fewer
+`building-sw4-on-nesi-and-rch.md`. Same conclusions, fewer
 acronyms — useful for explaining the findings to someone who
 doesn't work on HPC scaling tests.
 
@@ -122,5 +122,5 @@ pays for more science.
 - `cross-hpc-throughput.md` — full cross-HPC data and analysis.
 - `cascade-strong-vs-weak-puzzle.md` — diagnostic chain leading to
   the SIMD-width finding.
-- `nesi-sw4-rebuild-recommendation.md` — concrete rebuild
-  instructions for the NeSI maintainer.
+- `building-sw4-on-nesi-and-rch.md` — concrete rebuild instructions
+  for both NeSI and RCH.

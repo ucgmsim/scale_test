@@ -183,8 +183,8 @@ so its NaN-on overhead — when we eventually measure it — should
 land at ~10 % too.
 
 The full diagnostic chain is in `cascade-strong-vs-weak-puzzle.md`;
-rebuild recommendations are in `nesi-sw4-rebuild-recommendation.md`
-and `rch-sw4-rebuild-recommendation.md`.
+build instructions for both NeSI and RCH are in
+`building-sw4-on-nesi-and-rch.md`.
 
 ## Bandwidth hypothesis
 
@@ -244,7 +244,7 @@ fabric. Worth checking if anyone wants to chase it, but it's a
 second-order effect.
 
 Full diagnostic chain in `cascade-strong-vs-weak-puzzle.md`; rebuild
-recommendation for NeSI in `nesi-sw4-rebuild-recommendation.md`.
+instructions for NeSI and RCH in `building-sw4-on-nesi-and-rch.md`.
 
 ## Implications for users
 
@@ -270,8 +270,7 @@ recommendation for NeSI in `nesi-sw4-rebuild-recommendation.md`.
   SSE2-only as well, so budget ~10 % overhead there too. NeSI
   rebuilt with `-march=znver{3,4}` and RCH rebuilt with
   `-march=znver3` (Zen3 — **not** znver4) would close this gap —
-  see `nesi-sw4-rebuild-recommendation.md` and
-  `rch-sw4-rebuild-recommendation.md`.
+  see `building-sw4-on-nesi-and-rch.md`.
 
 ## What this still does not tell us
 

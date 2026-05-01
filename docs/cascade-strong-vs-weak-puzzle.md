@@ -85,7 +85,7 @@ the missing-`-march` build pattern — strengthening the conclusion
 that the SIMD-width gap is a build-flag effect rather than anything
 NeSI-specific. RCH's hardware caps out at AVX2 (no AVX-512 on Zen3),
 so the right rebuild target there is `-march=znver3`; see
-`rch-sw4-rebuild-recommendation.md`.
+`building-sw4-on-nesi-and-rch.md`.
 
 The binaries differ by 4× in theoretical SIMD width (zmm: 8 doubles
 vs. xmm: 2 doubles). That single fact resolves all three
@@ -105,7 +105,7 @@ cascade-vs-genoa anomalies:
 
 H1 below is therefore **confirmed** as the explanation, modulo a
 runtime experiment (rebuild NeSI's SW4 with `-march=znver4` and
-re-measure — see `nesi-sw4-rebuild-recommendation.md`).
+re-measure — see `building-sw4-on-nesi-and-rch.md`).
 
 ## What we've checked
 
@@ -201,7 +201,7 @@ a minor contributor.
    `-march=znver4` and re-run a single-node weak-126 + strong-126 pair
    on the genoa partition. If the strong/weak gap on genoa starts
    tracking cascade's pattern, H1 is fully confirmed end-to-end. The
-   rebuild instructions are in `nesi-sw4-rebuild-recommendation.md`.
+   rebuild instructions are in `building-sw4-on-nesi-and-rch.md`.
 
 4. (Optional, if curiosity persists) **Single-node, same cell count,
    different shape** on cascade — slab vs. cubic ~500 M cells at 126
