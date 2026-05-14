@@ -107,12 +107,13 @@ order depends on what you're trying to do:
   data and analysis.
 
 **Want to dig into specific findings:**
-- `docs/cascade-strong-vs-weak-puzzle.md` — diagnostic chain that
-  traced cascade's anomalous weak-throughput edge back to a build-flag
-  effect (the SIMD-width finding).
 - `docs/sw4-domain-shape-tuning.md` — how the per-rank grid shape
   affects throughput on wide-SIMD binaries. Coarse rules of thumb
   through closed-form back-of-envelope formulas.
+
+  (The diagnostic chain that landed on the SIMD-width finding now
+  lives in `docs/cross-hpc-throughput.md` § "The SIMD-width finding",
+  not in a separate doc.)
 
 **Want to rebuild or extend the workflow:**
 - `docs/building-sw4-on-nesi-and-rch.md` — operational recipes for

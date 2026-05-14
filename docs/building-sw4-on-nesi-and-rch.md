@@ -12,9 +12,9 @@ that actually worked end-to-end.
 For the *why* — what was wrong with the previous binaries, and the
 empirical case for rebuilding — see:
 
-- `cross-hpc-throughput.md` — cross-HPC dataset and the SIMD-width
-  finding.
-- `cascade-strong-vs-weak-puzzle.md` — full diagnostic chain.
+- `cross-hpc-throughput.md` — cross-HPC dataset, the SIMD-width
+  finding, and the diagnostic chain that landed on the
+  missing-`-march` cause.
 - `cross-hpc-findings-explained.md` — non-technical summary.
 
 ## When you'd run this

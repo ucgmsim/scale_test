@@ -273,10 +273,9 @@ work for you here than the global-grid choice would.
 
 ## References
 
-- `cross-hpc-throughput.md` — full cross-HPC dataset and the
-  SIMD-width finding.
-- `cascade-strong-vs-weak-puzzle.md` — diagnostic chain showing
-  where the strong/weak gap comes from.
+- `cross-hpc-throughput.md` — full cross-HPC dataset, the SIMD-width
+  finding, and the diagnostic chain showing where the strong-vs-weak
+  gap comes from (§ "The SIMD-width finding").
 - `cross-hpc-findings-explained.md` — non-technical version of the
   same story.
 - `building-sw4-on-nesi-and-rch.md` — rebuild instructions to enable

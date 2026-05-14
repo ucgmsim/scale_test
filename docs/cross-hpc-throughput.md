@@ -182,8 +182,107 @@ shows zero `%ymm` and zero `%zmm`) and has the same SSE2-only build,
 so its NaN-on overhead — when we eventually measure it — should
 land at ~10 % too.
 
-The full diagnostic chain is in `cascade-strong-vs-weak-puzzle.md`;
-build instructions for both NeSI and RCH are in
+The SIMD-width finding (full diagnostic in the section below) is what
+mediates this; build instructions for both NeSI and RCH are in
+`building-sw4-on-nesi-and-rch.md`.
+
+## The SIMD-width finding
+
+Three observations in the dataset pointed at the same root cause, and
+the conclusion was triangulated from independent measurements on each.
+The finding is what actually explains most of the cross-HPC differences
+— both within Zen4 (cascade vs. genoa) and partly across hardware
+classes.
+
+### Three anomalies, one direction
+
+Single-node throughput at 126 cores, no NaN check
+(G cell updates / core-hour):
+
+| HPC | Strong @ 126 | Weak @ 126 | Strong / Weak |
+|---|---|---|---|
+| genoa   | 2.60 | 2.45 | 1.06 (≈ flat) |
+| milan   | 1.72 | 1.62 | 1.06 (≈ flat) |
+| rch     | 1.36 | 1.27 | 1.07 (≈ flat) |
+| cascade | 2.55 | **3.58** | **0.71** (weak ~40 % higher) |
+
+Three things stand out:
+
+1. **Cascade weak throughput is ~46 % higher than genoa weak**,
+   despite identical Zen4-Genoa hardware (per partition specs).
+2. **Cascade's NaN-check overhead is ~2 % vs. ~9–12 % everywhere
+   else** — see "NaN-check overhead" above.
+3. **Cascade is the only HPC with a strong-vs-weak gap.** Every other
+   binary delivers near-identical throughput on the two grids of
+   matched per-rank cell count.
+
+### Root cause: SIMD width of the binary
+
+All three drop out of a single fact: cascade's SW4 binary was built
+with `-march=znver4` (AVX-512: 8 doubles per SIMD op), while NeSI's
+and RCH's were built **with no `-march` flag at all** (GCC's default
+is generic `x86-64` = SSE2: 2 doubles per SIMD op). Confirmed three
+ways:
+
+| HPC | Build provenance | SIMD signature |
+|---|---|---|
+| cascade | Spack spec `target=zen4` → Spack injects `-march=znver4` | AVX-512 |
+| NeSI    | `CMakeCache.txt` shows `CMAKE_BUILD_TYPE=Release` but `CMAKE_CXX_FLAGS` / `CMAKE_C_FLAGS` / `CMAKE_Fortran_FLAGS` all empty | `objdump -d` returns 0 `%ymm`, 0 `%zmm` — SSE2-only |
+| RCH     | Independently administered (UoC, not NeSI) | `objdump -d` returns 0 `%ymm`, 0 `%zmm` — SSE2-only |
+
+The RCH check is the cleanest cross-confirmation: same signature
+arrived at from a different organisation, different cluster, different
+admins. Build-flag effect, not anything NeSI-specific.
+
+### Why one fact explains three anomalies
+
+The 4× SIMD-width gap (zmm: 8 doubles vs. xmm: 2 doubles) interacts
+with grid shape because per-rank inner-loop length differs:
+
+| Grid | Per-rank brick at 126 ranks | Longest contiguous dim |
+|---|---|---|
+| Strong (128 × 1984 × 1984) | ≈ 128 × 140 × 220 | 220 cells |
+| Weak (1000 × 1000 × 500)   | ≈ 70 × 110 × 500   | 500 cells |
+
+Wide SIMD machinery has fixed startup costs per innermost loop pass
+(pipeline fill, prefetcher warm-up). On the weak grid (500-cell rows),
+AVX-512 has enough iterations to reach steady-state throughput. On
+the strong grid (220-cell rows), it doesn't quite — fixed overhead
+dominates. Narrow-SIMD (SSE2) binaries are too small to feel the
+difference: per-cell cost is dominated by chopping speed rather
+than fixed overhead, regardless of loop length. Detailed treatment
+of this mechanism in `sw4-domain-shape-tuning.md`.
+
+So:
+
+1. **Cascade's weak lead** = the only binary wide enough to feel the
+   longer weak-grid inner dim.
+2. **Cascade's cheap NaN check** = AVX-512 streams through the
+   trivially-streaming NaN scan ~4× faster than SSE2.
+3. **Cascade's strong-vs-weak gap** = same SIMD-amortisation story
+   showing up on a single binary across two grid shapes.
+
+### Alternatives considered
+
+- **Cache fit / prefetcher behaviour**: would predict similar shape
+  sensitivity on every Zen4 binary. Collapses into the SIMD story
+  if the prefetch-friendly behaviour is only realised by AVX-512
+  codegen.
+- **MPI decomposition imbalance** (128 doesn't divide evenly across
+  126 ranks): would affect every HPC equally. The other three HPCs
+  barely register a strong-vs-weak gap, so this is at most a minor
+  contributor.
+- **Intel-vs-GCC vectoriser**: dead. Spack spec shows cascade's SW4
+  was built with GCC 11.4.1, not Intel ICX. The `mpiicpx` in cascade's
+  SW4 banner is just the MPI wrapper Spack used to drive GCC.
+
+### Confirmation status
+
+A rebuild of the NeSI and RCH binaries with appropriate `-march`
+flags was completed 2026-05-01 and the post-rebuild scaling campaigns
+are queued as of 2026-05-15. If the post-rebuild strong/weak gap on
+genoa starts tracking cascade's pattern, the SIMD-width hypothesis is
+fully confirmed end-to-end. The rebuild recipe is in
 `building-sw4-on-nesi-and-rch.md`.
 
 ## Bandwidth hypothesis
@@ -222,20 +321,11 @@ Both compound to a ~2× per-rank throughput gap, which is what we see
 between the DDR5 and DDR4 machines (cascade/genoa ~2.3–3.5 vs.
 milan/RCH ~1.2–1.5).
 
-**Why cascade beats genoa on the same nominal hardware**: it's the
-SIMD width of the SW4 binary, not the hardware. Cascade's Spack
-build sets `target=zen4` → `-march=znver4` → AVX-512 (8 doubles per
-SIMD op). NeSI's CMake build leaves `CMAKE_*_FLAGS` empty, so GCC
-uses the generic `x86-64` default → SSE2 (2 doubles per SIMD op).
-Disassembly of the NeSI binary shows zero `%ymm` / `%zmm` register
-references; only `%xmm`.
-
-That ~4× SIMD-width difference accounts for cascade's ~46 %
-weak-scaling lead and ~4× cheaper NaN scan. On strong scaling the
-gap is smaller (2.32 vs. 2.48) because that grid's per-rank
-inner-loop length is short enough that even AVX-512 saturates DRAM
-bandwidth before its full SIMD width pays off — the two binaries
-end up bottlenecked at the same place.
+**Why cascade beats genoa on the same nominal hardware** is the
+SIMD-width story above — see "The SIMD-width finding". The bandwidth
+story explains the DDR5-vs-DDR4 split (the cascade/genoa cluster
+versus the milan/RCH cluster); the SIMD-width story explains the
+cascade/genoa difference *within* the DDR5 cluster.
 
 Strong-scaling efficiency is also slightly worse on cascade
 (79 % vs. 88 %), which is likely a separate inter-node-communication
@@ -243,8 +333,7 @@ effect — cascade's PBS/Intel-MPI fabric vs. NeSI's Slurm/OpenMPI
 fabric. Worth checking if anyone wants to chase it, but it's a
 second-order effect.
 
-Full diagnostic chain in `cascade-strong-vs-weak-puzzle.md`; rebuild
-instructions for NeSI and RCH in `building-sw4-on-nesi-and-rch.md`.
+Rebuild instructions for NeSI and RCH in `building-sw4-on-nesi-and-rch.md`.
 
 ## Implications for users
 
