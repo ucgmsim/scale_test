@@ -8,7 +8,8 @@
    a Python literal, so bare identifiers like `cascade` get parsed as
    names and rejected. Hyphenated values (`mahuika-genoa`) happen to fall
    back to strings, but the quoted form is correct in all cases.
-   Supported values: 'mahuika-milan' (default), 'mahuika-genoa', 'rch',
+   Supported values: 'mahuika-milan' (default), 'mahuika-genoa',
+   'mahuika-genoa-avx2' (experimental — see block below), 'rch',
    'cascade'. Each entry below sets the per-HPC bits; everything else
    (grid sizing, core counts, walltime, the graph) is shared.
    ------------------------------------------------------------------------- #}
@@ -38,6 +39,21 @@
     {# Wide-SIMD rebuild (2026-05-01): -march=znver4, AVX-512.
        See docs/building-sw4-on-nesi-and-rch.md. #}
     {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4-genoa' %}
+    {% set CONSTRAINT  = '' %}
+    {% set EXCLUDE     = '' %}
+    {% set JOB_RUNNER  = 'slurm' %}
+{% elif HPC == 'mahuika-genoa-avx2' %}
+    {# Experiment: run the AVX-2 (znver3) binary on Zen4 hardware to
+       isolate the SIMD-width + Zen3-vs-Zen4-tuning gap from any other
+       variable. Identical to mahuika-genoa apart from SW4_BIN pointing
+       at sw4-milan. See docs/building-sw4-on-nesi-and-rch.md
+       ("Pending follow-ups") for hypothesis and predicted outcome. #}
+    {% set PLATFORM    = 'mahuika' %}
+    {% set ACCOUNT     = 'nesi00213' %}
+    {% set PARTITION   = 'genoa' %}
+    {% set SMT_HINT    = 'nomultithread' %}
+    {% set MEM_PER_CPU = '2500M' %}
+    {% set SW4_BIN     = '/nesi/project/nesi00213/tools/sw4-milan' %}
     {% set CONSTRAINT  = '' %}
     {% set EXCLUDE     = '' %}
     {% set JOB_RUNNER  = 'slurm' %}

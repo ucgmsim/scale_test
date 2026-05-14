@@ -524,6 +524,54 @@ optionally the canonical `sw4` symlink at the new one). If < 5 %,
 keep `sw4-genoa` as-is and either retain `sw4-genoa-vw512` for
 science or remove it.
 
+### Genoa: run the milan binary on genoa to measure the AVX-2 vs AVX-512 gap
+
+Hypothesis: the milan binary (znver3 / AVX-2) on Zen4 hardware is
+~17–25 % slower than the genoa binary (znver4 / AVX-512) on the same
+hardware. Confirming this empirically tells us what we'd give up if
+we ever consolidated to a single "works on both partitions" binary,
+and is the cleanest possible isolation of the AVX-2 vs AVX-512 step
+(same hardware, same source tree, same compiler version — only `-march`
+differs between the two binaries).
+
+The cylc workflow has a dedicated HPC variant for this — added
+2026-05-15 as a sibling of `mahuika-genoa`:
+
+```bash
+# wait until the main mahuika-genoa rebuild campaign has succeeded
+# and we've confirmed sw4-genoa delivers as predicted, then:
+cylc vip flow --set 'HPC="mahuika-genoa-avx2"'
+```
+
+The variant is identical to `mahuika-genoa` apart from `SW4_BIN`
+pointing at `/nesi/project/nesi00213/tools/sw4-milan` instead of
+`sw4-genoa`. Same partition, account, mem-per-cpu, ranks, grid sizes
+— so results slot directly into `compare_scaling.py` alongside the
+other campaigns and plot on the same axes.
+
+**Predicted outcome**:
+
+| Binary on genoa | Predicted weak-126 throughput (G cell-updates / core-hour) |
+|---|---|
+| `sw4-genoa` (znver4, AVX-512)             | ~3.5 (main rebuild result) |
+| `sw4-milan` on genoa (znver3, AVX-2)      | **~2.9–3.0** |
+| Pre-rebuild SSE2 (existing baseline)      | 2.45 (measured) |
+
+If milan-on-genoa lands at ~2.9, the AVX-2 vs AVX-512 + tuning gap
+is ~17–20 %. That's the cost of running a single shared binary across
+both partitions.
+
+**Decision criteria**: this experiment is purely informational —
+we're not picking a winner, we're measuring a trade-off. Result
+goes into `cross-hpc-throughput.md` as a "what does a shared binary
+cost on genoa" data point. The actual `mahuika-genoa` production
+path stays on `sw4-genoa` regardless.
+
+**Cleanup**: keep the `mahuika-genoa-avx2` block in `flow.cylc` for
+reproducibility — it's small, well-commented, and unlikely to be run
+by accident (the default `HPC` value is `mahuika-milan`, and you'd
+have to explicitly pass `--set 'HPC="mahuika-genoa-avx2"'` to hit it).
+
 ## Common pitfalls
 
 - **Forgetting `-DUSE_PROJ=ON`**: the binary builds and runs `-h`
