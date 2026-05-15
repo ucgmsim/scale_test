@@ -52,6 +52,20 @@ moderate depth.
 > See [Grid shape effect](#grid-shape-effect) below for the
 > mechanism and per-binary numbers.
 
+> **Heads-up if you'll enable `developer checkfornan=on`.** The NaN
+> scan is a streaming pass run every time step; it costs more on
+> narrow-SIMD binaries:
+>
+> | Binary | NaN-check overhead |
+> |---|---|
+> | AVX-512 (cascade, NeSI/RCH post-rebuild)        | ~2 %  |
+> | AVX-2   (NeSI/RCH post-rebuild without AVX-512) | ~5 % (predicted) |
+> | SSE2    (NeSI/RCH pre-rebuild)                  | ~9–10 % |
+>
+> Multiply your `core_hours` estimate by `1 + overhead` if you'll
+> be running with NaN checking on. (For typical production runs the
+> default `checkfornan=off`, in which case ignore this.)
+
 ### Today's measured numbers
 
 These are what the scale-test campaigns have actually returned:
@@ -230,9 +244,6 @@ At `mem_per_cpu=2500M`: ~4.4 M cells/core; sit at 4 M for headroom.
   the cross-HPC comparability point, not the per-HPC optimum.
   Production users on genoa typically want all 336 cores/node; the
   per-core throughput at higher node fill is workload-dependent.
-- **NaN checking adds overhead.** On AVX-512 binaries (cascade,
-  rebuilt genoa) the overhead is ~2 %. On SSE2 binaries it's ~9–12 %.
-  Account for it if you'll be enabling `developer checkfornan=on`.
 - **MPI/launch overhead is ignored.** Each SW4 invocation has a
   startup cost of seconds-to-minutes that isn't captured in the
   cell-update math. For jobs of more than a few minutes wall-time,
