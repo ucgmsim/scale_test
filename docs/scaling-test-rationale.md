@@ -184,6 +184,49 @@ Rounded to **nx=128, ny=1984, nz=1984** (total 503.8 M cells). At
 cores=126 that's ~4.00 M cells/core; predicted MaxRSS ~2.17 GiB,
 ~11% under the 2500M budget.
 
+### What the chosen grids work out to per rank
+
+SW4's typical 2D decomposition preserves the smallest global dim and
+splits the other two across ranks in a near-square factorisation of
+the rank count. Working through the four core counts in each sweep:
+
+**Strong** — global grid fixed at 128 × 1984 × 1984:
+
+| Cores | 2D decomp | Per-rank brick    | Longest per-rank dim |
+|---    |---        |---                |---                   |
+| 126   |  9 × 14   | 128 × 142 × 220   | 220 |
+| 252   | 14 × 18   | 128 × 142 × 110   | 142 |
+| 378   | 18 × 21   | 128 × 110 × 94    | 128 |
+| 504   | 21 × 24   | 128 × 94  × 84    | 128 |
+
+**Weak** — global grid grows, but `nz = 500` is the smallest dim
+throughout, so it's preserved whole at every row:
+
+| Cores | 2D decomp | Per-rank brick    | Longest per-rank dim |
+|---    |---        |---                |---                   |
+| 126   |  9 × 14   | 71 × 111 × 500    | **500** |
+| 252   | 14 × 18   | 79 × 101 × 500    | **500** |
+| 378   | 18 × 21   | 83 × 97  × 500    | **500** |
+| 504   | 21 × 24   | 84 × 96  × 500    | **500** |
+
+This makes the design's main asymmetry visible at a glance: **every
+weak run has a longer per-rank inner loop than every strong run**.
+On wide-SIMD binaries (cascade today, NeSI/RCH after rebuild) the
+longer inner loop lets AVX-512 reach steady-state amortisation, so
+weak throughput sits comfortably above strong throughout the sweep.
+On narrow-SIMD (SSE2) binaries the difference is invisible and the
+two curves track each other.
+
+This is an accidental consequence of choosing the strong grid as a
+slab (`nx = 128`, small) and the weak grid as more cubic (`nz = 500`,
+medium): the smallest-dim-preserved rule then maps `nx = 128` to the
+strong per-rank longest and `nz = 500` to the weak per-rank longest.
+A future "next-time" design might match the two shapes deliberately
+(both cubic-ish per rank at the anchor) to remove the conflation
+between scaling-type and shape — see the analysis in
+`cross-hpc-throughput.md` § "The SIMD-width finding" for what this
+conflation surfaced as evidence.
+
 ## Walltime: `--time=03:00:00`
 
 Measured throughput across the three successful second-run strong tests

@@ -68,35 +68,66 @@ faster.
 
 We ran two test types. Each gives every core roughly the same
 amount of work (~4 million cells per core), but **shaped
-differently**:
+differently**. The CPU works through one "row" at a time along the
+longest dimension of each core's chunk before fetching the next
+supply — so **the length of that longest row is the variable that
+decides whether the wide knives help or get under-used**.
 
-| Test | Whole grid | Per-core chunk |
-|---|---|---|
-| Strong | 128 × 1984 × 1984 | ~128 × 140 × 220 |
-| Weak   | 1000 × 1000 × 500 | ~70 × 110 × 500   |
+### Strong test — global grid fixed, cores grow
 
-The CPU works through one "row" at a time along the longest
-dimension before fetching the next supply.
+The global grid is held constant; each core's chunk shrinks as we
+add cores.
 
-- **Strong test**: longest dimension per core is **220 cells**. The
-  chef chops a row of 220 onions, then has to wait for the next
-  delivery. Short rows mean lots of waiting and little chopping.
-- **Weak test**: longest dimension per core is **500 cells** —
-  more than 2× longer. The chef can chop straight through 500
-  onions before needing to refetch.
+| Cores | Global grid       | Per-core chunk    | Per-core longest row |
+|---    |---                |---                |---                   |
+| 126   | 128 × 1984 × 1984 | 128 × 142 × 220   | 220 |
+| 252   | 128 × 1984 × 1984 | 128 × 142 × 110   | 142 |
+| 378   | 128 × 1984 × 1984 | 128 × 110 × 94    | 128 |
+| 504   | 128 × 1984 × 1984 | 128 × 94  × 84    | 128 |
 
-Now the four cases play out cleanly:
+The longest row **shrinks** as cores grow (the global grid keeps
+getting sliced finer). At 126 cores it's already only 220 cells.
 
-|                              | ESNZ CPU (8 knives) | NeSI CPU (2 knives) |
-|---                           |---|---|
-| **Strong** (220-cell rows)   | Waiting on memory anyway → ~2.5 | Waiting on memory anyway → ~2.5 |
-| **Weak** (500-cell rows)     | Plenty of work cached, 8 knives blast through → **3.5** | Plenty of work cached, but the 2 knives can't keep up → ~2.5 |
+### Weak test — global grid grows with cores
 
-So three cases look similar because they're all bottlenecked on
-something other than knife count — either the deliveries are too
-slow (the strong test, both CPUs) or the knives are too few (the
-weak test, NeSI). Only the ESNZ weak test escapes both bottlenecks
-at once, which is why it's the one outlier.
+Each core's chunk stays roughly the same size; the global grid grows
+to match.
+
+| Cores | Global grid       | Per-core chunk    | Per-core longest row |
+|---    |---                |---                |---                   |
+| 126   | 1000 × 1000 × 500 | 71 × 111 × 500    | **500** |
+| 252   | 1420 × 1420 × 500 | 79 × 101 × 500    | **500** |
+| 378   | 1740 × 1740 × 500 | 83 × 97 × 500     | **500** |
+| 504   | 2008 × 2008 × 500 | 84 × 96 × 500     | **500** |
+
+The longest row **stays at 500 cells throughout**, because the
+500-cell dimension was the smallest of the global grid and the
+decomposition leaves it untouched.
+
+### The point — weak's longest row is always longer
+
+**In every single weak-scaling run, the per-core longest row is 500
+cells. In every single strong-scaling run, it's 220 or less.** That
+single difference — weak's longest row always being longer than
+strong's — is what creates the throughput gap on the ESNZ machine.
+
+For the wide-knife CPU (ESNZ, 8 knives):
+
+- **Strong** (rows ≤ 220): not long enough to keep all 8 knives fed.
+  The chef wastes time waiting for the next row to start. Throughput
+  ≈ 2.5.
+- **Weak** (rows = 500): comfortably long enough to keep all 8 knives
+  busy non-stop. Throughput ≈ **3.5**.
+
+For the narrow-knife CPU (NeSI, 2 knives):
+
+- Both tests look similar (~2.5). Two knives are easy to keep fed
+  even on short rows — the CPU isn't the bottleneck either way.
+
+So three of the four cases look similar because they're not
+CPU-bound at all. Only the ESNZ weak test combines wide knives
+*with* long enough rows to actually use them — and that's the one
+outlier.
 
 ## The fix and what it gets us
 

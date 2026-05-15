@@ -237,21 +237,47 @@ admins. Build-flag effect, not anything NeSI-specific.
 ### Why one fact explains three anomalies
 
 The 4× SIMD-width gap (zmm: 8 doubles vs. xmm: 2 doubles) interacts
-with grid shape because per-rank inner-loop length differs:
+with grid shape because **the longest per-rank dim is the variable
+that decides whether AVX-512 reaches steady state**.
 
-| Grid | Per-rank brick at 126 ranks | Longest contiguous dim |
-|---|---|---|
-| Strong (128 × 1984 × 1984) | ≈ 128 × 140 × 220 | 220 cells |
-| Weak (1000 × 1000 × 500)   | ≈ 70 × 110 × 500   | 500 cells |
+For the strong test the global grid is fixed, so the per-rank brick
+shrinks (and changes shape) as cores grow:
 
-Wide SIMD machinery has fixed startup costs per innermost loop pass
-(pipeline fill, prefetcher warm-up). On the weak grid (500-cell rows),
-AVX-512 has enough iterations to reach steady-state throughput. On
-the strong grid (220-cell rows), it doesn't quite — fixed overhead
-dominates. Narrow-SIMD (SSE2) binaries are too small to feel the
-difference: per-cell cost is dominated by chopping speed rather
-than fixed overhead, regardless of loop length. Detailed treatment
-of this mechanism in `sw4-domain-shape-tuning.md`.
+| Cores | 2D decomp | Global grid       | Per-rank brick    | Longest per-rank dim |
+|---    |---        |---                |---                |---                   |
+| 126   |  9 × 14   | 128 × 1984 × 1984 | 128 × 142 × 220   | 220 |
+| 252   | 14 × 18   | 128 × 1984 × 1984 | 128 × 142 × 110   | 142 |
+| 378   | 18 × 21   | 128 × 1984 × 1984 | 128 × 110 × 94    | 128 |
+| 504   | 21 × 24   | 128 × 1984 × 1984 | 128 × 94  × 84    | 128 |
+
+For the weak test the global grid grows with cores, but `nz = 500`
+is the smallest global dim throughout, so the decomposition preserves
+it whole — the longest per-rank dim stays **pinned at 500** for the
+entire sweep:
+
+| Cores | 2D decomp | Global grid       | Per-rank brick    | Longest per-rank dim |
+|---    |---        |---                |---                |---                   |
+| 126   |  9 × 14   | 1000 × 1000 × 500 | 71 × 111 × 500    | **500** |
+| 252   | 14 × 18   | 1420 × 1420 × 500 | 79 × 101 × 500    | **500** |
+| 378   | 18 × 21   | 1740 × 1740 × 500 | 83 × 97  × 500    | **500** |
+| 504   | 21 × 24   | 2008 × 2008 × 500 | 84 × 96  × 500    | **500** |
+
+**Every weak run has a longer per-rank inner loop than every strong
+run.** That single fact is the lever — combined with AVX-512's
+~256-cell saturation threshold (see `sw4-domain-shape-tuning.md`),
+500-cell rows comfortably saturate the wide pipeline; 220-cell rows
+just barely don't, and 128-cell rows fall meaningfully short.
+
+Narrow-SIMD (SSE2) binaries are too small to feel the difference —
+their per-cell cost is dominated by chopping speed rather than
+pipeline fixed-overhead, regardless of loop length — which is why
+NeSI/RCH show no strong-vs-weak gap pre-rebuild.
+
+The cascade strong-scaling curve declining from 2.55 → 2.02 across
+the sweep (at 126 → 504 cores) is the same effect on a single
+binary: as cores grow, the per-rank brick walks *deeper* into the
+ramp-up region of the AVX-512 amortisation curve. It isn't entirely
+inter-node-communication overhead.
 
 So:
 
