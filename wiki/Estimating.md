@@ -1,188 +1,44 @@
-# Estimating wall-time and core-hours
+# Estimating wall-time and core-hours for SW4 simulations
 
-To plan an SW4 simulation, you need two estimates:
+The size of an SW4 simulation is given by the total number of cell-updates, $N$
 
-- **Wall-clock time** — how long you'll wait for the job to finish.
-- **Core-hours** — how much of your HPC allocation it will consume.
+The number of cell updates, $N$, in an SW4 simulation is given by 
 
-Both follow from one number per HPC: **per-core throughput** in
-*Giga (G) cell-updates per core-hour*. Look the number up below, plug it
-into the formula, and you've got an estimate good to ±20 % (often
-better) on the HPCs we've measured.
+$N = n_x \times n_y \times n_z \times n_t$ where $n_x$, $n_y$, $n_z$ are the 
+number of grid cells in the $x$, $y$, and $z$ dimensions, respectively, and $n_t$
+is the total number of time steps in the simulation.
 
-See the [Home page](Home.md) for the list of HPCs and high-level
-guidance on which to pick.
 
-## The formula
+The compute, $C$, required for a simulation of $N$ cell-updates is given by
+$$ C = \frac{N}{(T \times 10^9)} $$
 
-The work done by an SW4 simulation is well-approximated by the
-total **cell-updates** — every cell in every time step counts as
-one update:
+where $C$ is in core-hours, and $T$ is throughput in Giga cell-updates / core-hour.
 
-```
-total_cell_updates = nx × ny × nz × time_steps
-```
+Assuming ideal scaling, the required wall-clock time, $t_w$, in hours, is given by 
+$$ t_w = \frac{C}{N_c} $$
 
-Given a per-core throughput `T` (in G cell-updates / core-hour) and
-a rank count `cores`:
+where $N_c$ is the rank count (or number of cores).
 
-```
-core_hours  = total_cell_updates / (T × 10⁹)
-wall_hours  = core_hours / cores                    # ideal scaling
-```
+Measured throughputs, scaling efficiencies, and NaN check overheads for several HPCs are shown in the following table:
 
-Both formulas assume ideal scaling (no overhead from inter-node
-communication). Real workloads see scaling efficiency below 100 %
-— see the [Scaling efficiency](#scaling-efficiency) section
-below for how much to derate by.
+| HPC                | Throughput, $T$ <br> (Giga cell-updates / core-hour) | Scaling <br> efficiency  (%) | NaN check <br> overhead (%) |
+|---                 |---                                                   |---                           | ---                         |
+| Cascade            | 3.5                                                  | 98                           | 2                           |
+| Mahuika Genoa      | 2.4                                                  | 97                           | 2                           |              
+| Mahuika Milan      | 1.5                                                  | 84                           | 5                           |
+| RCH                | 1.2                                                  | 87                           | 5                           |
 
-## Per-HPC throughput
+These throughputs were derived using 126 ranks/node as this configuration was possible on all tested HPCs, but some support more ranks/node. They are also not inclusive of the optional NaN check overhead. Furthermore, they are for a roughly cube-shaped simulation domain, so if one domain dimension is much smaller than the others, throughput is reduced by ~30 % on Cascade, Genoa, and RCH (see [Grid shape effect](#grid-shape-effect) for details). 
 
-Values are per-core throughput at 126 ranks/node, no NaN checking,
-in *G cell-updates per core-hour*. The numbers assume a
-**roughly cubic per-rank brick** — what you get on a typical
-production earthquake simulation with large horizontal extent and
-moderate depth.
 
-> **Heads-up for slab-shaped grids.** If one global dim of your
-> simulation is much smaller than the others (typically `nz ≤ ~150`
-> cells, e.g. a very shallow regional model), per-core throughput is
-> lower than the table below: ~30 % on AVX-512 binaries (cascade
-> and NeSI/RCH after rebuild), 15–25 % on AVX-2, negligible on SSE2.
-> See [Grid shape effect](#grid-shape-effect) below for the
-> mechanism and per-binary numbers.
+## Memory
 
-> **Heads-up if you'll enable `developer checkfornan=on`.** The NaN
-> scan is a streaming pass run every time step; it costs more on
-> narrow-SIMD binaries:
->
-> | Binary | NaN-check overhead |
-> |---|---|
-> | AVX-512 (cascade, NeSI/RCH post-rebuild)        | ~2 %  |
-> | AVX-2   (NeSI/RCH post-rebuild without AVX-512) | ~5 % (predicted) |
-> | SSE2    (NeSI/RCH pre-rebuild)                  | ~9–10 % |
->
-> Multiply your `core_hours` estimate by `1 + overhead` if you'll
-> be running with NaN checking on. (For typical production runs the
-> default `checkfornan=off`, in which case ignore this.)
-
-### Today's measured numbers
-
-These are what the scale-test campaigns have actually returned:
-
-| HPC                | Per-core throughput | Notes                                    |
-|---                 |---                  |---                                       |
-| Cascade            | **3.54**            | Zen4 + AVX-512 + DDR5-4800               |
-| Mahuika genoa      | 2.45                | Zen4 + DDR5-4800, **SSE2-only binary**   |
-| Mahuika milan      | 1.54                | Zen3 + DDR4-3200, SSE2-only binary       |
-| RCH hcpu           | 1.20                | Zen3 + DDR4, SSE2-only binary            |
-
-### Projected post-rebuild numbers
-
-The NeSI and RCH binaries have been rebuilt with `-march=znver{3,4}`
-to enable AVX-2/AVX-512. The post-rebuild scaling-test campaign is
-queued; until results come back, predicted numbers are:
-
-| HPC                | Predicted weak | Confidence                          |
-|---                 |---             |---                                  |
-| Mahuika genoa      | ~3.5           | High — should match cascade closely |
-| Mahuika milan      | ~2.0           | Medium                              |
-| RCH n              | ~1.5           | Medium                              |
-
-This page will be updated with the empirical numbers once the
-campaign completes.
-
-## Worked examples
-
-### Example 1: a regional simulation on cascade
-
-A 2000 × 2000 × 500 grid (100 × 100 × 25 km at 50 m spacing) for
-50 000 time steps, planned for cascade:
+Testing shows that SW4's per-rank memory footprint can be modelled as:
 
 ```
-total_cell_updates = 2000 × 2000 × 500 × 50000 = 1.0 × 10¹⁴ cell-updates
-core_hours         = 1.0 × 10¹⁴ / (3.54 × 10⁹) ≈ 28 000 core-hours
+memory_per_task_MiB ≈ 270 + 0.000510 × cells_per_rank
+                    ≈ 270 + 0.51 × (cells_per_rank / 1000)
 ```
-
-At 384 cores per node, a 4-node allocation (1536 cores):
-
-```
-wall_hours = 28 000 / 1536 ≈ 18 hours
-```
-
-So about **18 hours of wall-clock time** and **28 000 core-hours**
-of budget burn. (Apply weak-scaling efficiency derating — see below
-— for a more conservative estimate: 28 000 / 0.98 ≈ 28 600
-core-hours, wall ~18.6 hours.)
-
-Memory check at 1536 cores: `cells_per_rank ≈ 1.3 M`, `mem_per_task
-≈ 270 + 0.510 × 1300 ≈ 933 MiB` — fits comfortably under
-`--mem-per-cpu=2500M`.
-
-### Example 2: the same job on NeSI milan
-
-Same grid, same time steps, but on milan today (SSE2-only binary):
-
-```
-core_hours = 1.0 × 10¹⁴ / (1.54 × 10⁹) ≈ 65 000 core-hours
-```
-
-At 128 cores per node, a 4-node allocation (512 cores), with the
-84 % weak-scaling efficiency derating already factored in:
-
-```
-adjusted_core_hours = 65 000 / 0.84 ≈ 77 000 core-hours
-wall_hours          = 77 000 / 512  ≈ 150 hours ≈ 6.3 days
-```
-
-So **2.3× the core-hours** of cascade and **8× the wall-clock time**
-(milan has fewer cores per node, so the same 4 nodes is only 512
-cores vs. cascade's 1536). After the rebuild lands, expect ~30 %
-better on milan, but it remains substantially slower than the Zen4
-HPCs for stencil work.
-
-### Example 3: a short test run on genoa
-
-A 500 × 500 × 200 grid for 1000 time steps — typical "does it run"
-shakedown:
-
-```
-total_cell_updates = 500 × 500 × 200 × 1000 = 5.0 × 10¹⁰ cell-updates
-core_hours         = 5.0 × 10¹⁰ / (2.45 × 10⁹) ≈ 20 core-hours
-wall_hours         = 20 / 126 ≈ 0.16 hours ≈ 10 minutes
-```
-
-So a **10-minute test run** for 20 core-hours on a single node.
-Useful as a calibration before submitting the full job.
-
-## Scaling efficiency
-
-The numbers above are per-core throughput at a single node (126
-ranks). When you scale out, per-core throughput drops because of
-inter-node communication. For a workload where the problem grows
-with the number of cores (the typical case for large production
-runs), the 4-node empirical efficiency is:
-
-| HPC                 | 1 → 4 node efficiency |
-|---                  |---                    |
-| Cascade             | 98 %                  |
-| NeSI Mahuika genoa  | 97 %                  |
-| NeSI Mahuika milan  | 84 %                  |
-| RCH hcpu            | 87 %                  |
-
-To incorporate, divide your `core_hours` estimate by the relevant
-efficiency:
-
-```
-adjusted_core_hours = core_hours / efficiency
-```
-
-For most planning purposes, **assume ~95 %** on Zen4/DDR5 HPCs
-(cascade, genoa) and **~85 %** on Zen3/DDR4 HPCs (milan, RCH). For
-fixed-size workloads spread across many cores (a less common pattern
-where the per-core work shrinks as cores grow), per-core efficiency
-is lower — see the corresponding numbers in
-[`docs/cross-hpc-throughput.md`](https://github.com/ucgmsim/scale_test/blob/main/docs/cross-hpc-throughput.md).
 
 ## Grid shape effect
 
@@ -213,63 +69,4 @@ closed-form back-of-envelope optimum for picking grid dimensions —
 see [`docs/sw4-domain-shape-tuning.md`](https://github.com/ucgmsim/scale_test/blob/main/docs/sw4-domain-shape-tuning.md)
 in the main repo.
 
-## Memory
 
-SW4's per-rank memory footprint is well-modelled by:
-
-```
-memory_per_task_MiB ≈ 270 + 0.000510 × cells_per_rank
-                    ≈ 270 + 0.51 × (cells_per_rank / 1000)
-```
-
-(Derived empirically from OOM-calibration runs at 8 M / 12 M
-cells/core. Applies to the standard SW4-with-attenuation
-configuration; PML / supergrid / topography would add more.)
-
-At the **~4 M cells/core** sizing used in the scaling tests, that's
-~2.3 GiB per rank — sized to fit comfortably in `--mem-per-cpu=2500M`
-on NeSI genoa with margin.
-
-If you're sizing a new run, the inverse formula is:
-
-```
-max_cells_per_rank ≈ (mem_per_cpu_MiB − 270) / 0.000510
-```
-
-At `mem_per_cpu=2500M`: ~4.4 M cells/core; sit at 4 M for headroom.
-
-## Caveats
-
-- **The numbers are per-core throughput at 126 ranks/node.** That's
-  the cross-HPC comparability point, not the per-HPC optimum.
-  Production users on genoa typically want all 336 cores/node; the
-  per-core throughput at higher node fill is workload-dependent.
-- **MPI/launch overhead is ignored.** Each SW4 invocation has a
-  startup cost of seconds-to-minutes that isn't captured in the
-  cell-update math. For jobs of more than a few minutes wall-time,
-  ignorable; for very short jobs, add a fixed budget.
-- **The throughput numbers were measured on a synthetic workload**
-  (uniform velocity model, simple point source, 1000 time steps,
-  uniform 100 m grid). Real production workloads with topography,
-  attenuation, or non-trivial source descriptions may run slower —
-  budget ~10–20 % extra for these effects.
-- **Milan has high per-job variance**: an individual milan run can
-  land at 60–150 % of the table value depending on which physical
-  node Slurm picks. Plan for the worst case if you need wall-time
-  guarantees.
-
-## Choosing an HPC
-
-By workload type:
-
-| Goal                                       | Best choice                          | Why                                                |
-|---                                         |---                                   |---                                                 |
-| Maximum throughput per core-hour           | **Cascade** (or genoa-after-rebuild) | AVX-512 + DDR5 + flat 98 % scaling out to 4 nodes  |
-| Predictable wall-clock budget              | **Cascade**                          | Tightest spread (~98 % stability, no zigzag)       |
-| Fallback when DDR5 HPCs unavailable        | **RCH hcpu**                         | Steady DDR4 performance, consistent across jobs    |
-| Last resort                                | NeSI milan                           | Works, but variance is bad enough to plan around   |
-
-By queue availability: at any given moment one of the above may be
-oversubscribed; the table above is a "given equal queue waits" guide.
-For long-running production work it's often worth submitting to two
-HPCs in parallel and using whichever gets allocated first.
