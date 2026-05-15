@@ -33,36 +33,19 @@ These throughputs were derived using 126 ranks/node as this configuration was po
 
 ## Memory
 
-Testing shows that SW4's per-rank memory footprint can be modelled as:
+Testing shows that SW4's memory footprint per rank, $M_r$, can be modelled in MiB as:
 
-```
-memory_per_task_MiB ≈ 270 + 0.000510 × cells_per_rank
-                    ≈ 270 + 0.51 × (cells_per_rank / 1000)
-```
+$M_r \approx 270 + n_r \times 5.1 \times 10 ^{-4}$ 
+
+where $n_r$ is the number of cells per rank.
 
 ## Grid shape effect
 
-The per-HPC numbers above assume a **roughly cubic per-rank brick**.
-A grid like 1000 × 1000 × 500 — large horizontal extent, moderate
-depth — produces that. SW4's MPI decomposition preserves the
-smallest global dim whole and splits the other two across ranks,
-so the per-rank brick ends up shape-matched to the global one.
+The provided throughputs were drived from a **roughly cubic per-rank brick**
+produced by a domain grid like 1000 × 1000 × 500 because SW4's MPI decomposition preserves the smallest global dimension whole and splits the other two across ranks.
 
-If your global grid is **slab-shaped** (one dim much smaller than
-the others, e.g. 128 × 1984 × 1984 for a shallow shelf or a very
-thin sediment basin), the per-rank brick has a shorter inner loop
-and wide-SIMD machinery under-uses its lanes. Per-core throughput
-is lower than the table by:
-
-| Binary's SIMD width | Shape effect on slab grids (vs. cubic numbers) |
-|---                  |---                                             |
-| AVX-512 (cascade, NeSI/RCH post-rebuild)             | **~30 % lower** (up to ~40 % for very slab-y shapes) |
-| AVX-2 (NeSI/RCH post-rebuild w/o AVX-512)            | ~15–25 % lower |
-| SSE2 (NeSI/RCH pre-rebuild)                          | < 10 % (within noise) |
-
-Quick rule for whether your grid is "slab-shaped" for this purpose:
-if `nz / max(nx, ny) ≲ 0.1` (or any other axis is similarly small),
-apply the slab derating.
+If the global grid is **slab-shaped** with one dimension much smaller than
+the other two, the wide-SIMD capacity of Cascade, RCH, and Milan will be under-utilized, reducing throughputs by up to ~30%.
 
 For production-tuning beyond this rough cut — including the
 closed-form back-of-envelope optimum for picking grid dimensions —
