@@ -1,9 +1,9 @@
 # SW4 scale test
 
 A scaling-performance benchmark for the [SW4](https://github.com/geodynamics/sw4)
-earthquake-simulation code, run on the HPCs available to Quake-CoRE
-researchers. The headline output is **per-core throughput in
-G cell-updates per core-hour** for each HPC — enough to estimate
+earthquake-simulation code, run on several HPCs.
+The headline output is **per-core throughput in
+Giga (G) cell-updates per core-hour** for each HPC — enough to estimate
 wall-time and core-hours for a planned SW4 run before submitting it.
 
 See the [Estimating](Estimating.md) page for the formula, per-HPC
@@ -18,12 +18,12 @@ numbers, worked examples, and caveats.
 
 ## HPCs measured
 
-| HPC                | Owner | Architecture           | Cores/node | Per-core throughput today (G cell-updates / core-hour) |
-|---                 |---    |---                     |---         |---                                                     |
-| Cascade            | ESNZ  | Zen4 Genoa, DDR5-4800  | 384        | **3.5** weak / 2.3 strong                              |
-| NeSI Mahuika genoa | NeSI  | Zen4 Genoa, DDR5-4800  | 336        | 2.5 weak / 2.5 strong (rebuild → expected ~3.5 weak)   |
-| NeSI Mahuika milan | NeSI  | Zen3, DDR4-3200        | 128        | 1.5 weak / 1.5 strong (rebuild → expected ~2.0 weak)   |
-| RCH hcpu           | UoC   | Zen3, DDR4             | 144–192    | 1.2 weak / 1.2 strong (rebuild → expected ~1.5 weak)   |
+| HPC           | Owner  | Architecture           | Cores/node | Per-core throughput today (G cell-updates / core-hour) |
+|---            |---     |---                     |---         |---                                                     |
+| Cascade       | ESNZ   | Zen4 Genoa, DDR5-4800  | 384        | **3.5** weak / 2.3 strong                              |
+| Mahuika genoa | REANNZ | Zen4 Genoa, DDR5-4800  | 336        | 2.5 weak / 2.5 strong (rebuild → expected ~3.5 weak)   |
+| Mahuika milan | REANNZ | Zen3, DDR4-3200        | 128        | 1.5 weak / 1.5 strong (rebuild → expected ~2.0 weak)   |
+| RCH           | UC     | Zen3, DDR4             | 144–192    | 1.2 weak / 1.2 strong (rebuild → expected ~1.5 weak)   |
 
 Weak vs. strong is mainly about per-rank work shape — see the
 [Estimating](Estimating.md) page for how to pick the right number for

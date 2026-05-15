@@ -6,7 +6,7 @@ To plan an SW4 simulation, you need two estimates:
 - **Core-hours** — how much of your HPC allocation it will consume.
 
 Both follow from one number per HPC: **per-core throughput** in
-*G cell-updates per core-hour*. Look the number up below, plug it
+*Giga (G) cell-updates per core-hour*. Look the number up below, plug it
 into the formula, and you've got an estimate good to ±20 % (often
 better) on the HPCs we've measured.
 
@@ -51,8 +51,8 @@ These are what the scale-test campaigns have actually returned:
 | HPC                | Strong (slab-shaped grid) | Weak (cubic-ish grid) | Notes                                    |
 |---                 |---                        |---                    |---                                       |
 | Cascade            | 2.32                      | **3.54**              | Zen4 + AVX-512 + DDR5-4800               |
-| NeSI Mahuika genoa | 2.48                      | 2.45                  | Zen4 + DDR5-4800, **SSE2-only binary**   |
-| NeSI Mahuika milan | 1.46                      | 1.54                  | Zen3 + DDR4-3200, SSE2-only binary       |
+| Mahuika genoa      | 2.48                      | 2.45                  | Zen4 + DDR5-4800, **SSE2-only binary**   |
+| Mahuika milan      | 1.46                      | 1.54                  | Zen3 + DDR4-3200, SSE2-only binary       |
 | RCH hcpu           | 1.21                      | 1.20                  | Zen3 + DDR4, SSE2-only binary            |
 
 ### Projected post-rebuild numbers
@@ -63,9 +63,9 @@ queued; until results come back, predicted numbers are:
 
 | HPC                | Predicted weak | Confidence                          |
 |---                 |---             |---                                  |
-| NeSI Mahuika genoa | ~3.5           | High — should match cascade closely |
-| NeSI Mahuika milan | ~2.0           | Medium                              |
-| RCH hcpu           | ~1.5           | Medium                              |
+| Mahuika genoa      | ~3.5           | High — should match cascade closely |
+| Mahuika milan      | ~2.0           | Medium                              |
+| RCH n              | ~1.5           | Medium                              |
 
 This page will be updated with the empirical numbers once the
 campaign completes.
