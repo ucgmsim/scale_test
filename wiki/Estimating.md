@@ -39,21 +39,29 @@ below for how much to derate by.
 ## Per-HPC throughput
 
 Values are per-core throughput at 126 ranks/node, no NaN checking,
-in *G cell-updates per core-hour*. Two columns are given because
-throughput depends on grid shape (more in [Grid shape effect](#grid-shape-effect)
-below). For most production workloads with large 3D domains, the
-**weak** column is the better default.
+in *G cell-updates per core-hour*. The numbers assume a
+**roughly cubic per-rank brick** — what you get on a typical
+production earthquake simulation with large horizontal extent and
+moderate depth.
+
+> **Heads-up for slab-shaped grids.** If one global dim of your
+> simulation is much smaller than the others (typically `nz ≤ ~150`
+> cells, e.g. a very shallow regional model), per-core throughput is
+> lower than the table below: ~30 % on AVX-512 binaries (cascade
+> and NeSI/RCH after rebuild), 15–25 % on AVX-2, negligible on SSE2.
+> See [Grid shape effect](#grid-shape-effect) below for the
+> mechanism and per-binary numbers.
 
 ### Today's measured numbers
 
 These are what the scale-test campaigns have actually returned:
 
-| HPC                | Strong (slab-shaped grid) | Weak (cubic-ish grid) | Notes                                    |
-|---                 |---                        |---                    |---                                       |
-| Cascade            | 2.32                      | **3.54**              | Zen4 + AVX-512 + DDR5-4800               |
-| Mahuika genoa      | 2.48                      | 2.45                  | Zen4 + DDR5-4800, **SSE2-only binary**   |
-| Mahuika milan      | 1.46                      | 1.54                  | Zen3 + DDR4-3200, SSE2-only binary       |
-| RCH hcpu           | 1.21                      | 1.20                  | Zen3 + DDR4, SSE2-only binary            |
+| HPC                | Per-core throughput | Notes                                    |
+|---                 |---                  |---                                       |
+| Cascade            | **3.54**            | Zen4 + AVX-512 + DDR5-4800               |
+| Mahuika genoa      | 2.45                | Zen4 + DDR5-4800, **SSE2-only binary**   |
+| Mahuika milan      | 1.54                | Zen3 + DDR4-3200, SSE2-only binary       |
+| RCH hcpu           | 1.20                | Zen3 + DDR4, SSE2-only binary            |
 
 ### Projected post-rebuild numbers
 
@@ -137,14 +145,16 @@ Useful as a calibration before submitting the full job.
 
 The numbers above are per-core throughput at a single node (126
 ranks). When you scale out, per-core throughput drops because of
-inter-node communication. From the empirical 4-node measurements:
+inter-node communication. For a workload where the problem grows
+with the number of cores (the typical case for large production
+runs), the 4-node empirical efficiency is:
 
-| HPC                 | 1 → 4 node strong-scaling efficiency | 1 → 4 node weak-scaling efficiency |
-|---                  |---                                   |---                                 |
-| Cascade             | 79 %                                 | 98 %                               |
-| NeSI Mahuika genoa  | 88 %                                 | 97 %                               |
-| NeSI Mahuika milan  | 68 % (high variance)                 | 84 %                               |
-| RCH hcpu            | 81 %                                 | 87 %                               |
+| HPC                 | 1 → 4 node efficiency |
+|---                  |---                    |
+| Cascade             | 98 %                  |
+| NeSI Mahuika genoa  | 97 %                  |
+| NeSI Mahuika milan  | 84 %                  |
+| RCH hcpu            | 87 %                  |
 
 To incorporate, divide your `core_hours` estimate by the relevant
 efficiency:
@@ -153,28 +163,40 @@ efficiency:
 adjusted_core_hours = core_hours / efficiency
 ```
 
-For most planning purposes, **assume 80 % strong / 95 % weak** unless
-you're running on milan (where higher variance makes the number less
-reliable) or scaling well past 4 nodes (where the curves haven't been
-measured).
+For most planning purposes, **assume ~95 %** on Zen4/DDR5 HPCs
+(cascade, genoa) and **~85 %** on Zen3/DDR4 HPCs (milan, RCH). For
+fixed-size workloads spread across many cores (a less common pattern
+where the per-core work shrinks as cores grow), per-core efficiency
+is lower — see the corresponding numbers in
+[`docs/cross-hpc-throughput.md`](https://github.com/ucgmsim/scale_test/blob/main/docs/cross-hpc-throughput.md).
 
 ## Grid shape effect
 
-Per-core throughput depends on how the global grid is shaped relative
-to how SW4 decomposes it across MPI ranks. The general rule:
+The per-HPC numbers above assume a **roughly cubic per-rank brick**.
+A grid like 1000 × 1000 × 500 — large horizontal extent, moderate
+depth — produces that. SW4's MPI decomposition preserves the
+smallest global dim whole and splits the other two across ranks,
+so the per-rank brick ends up shape-matched to the global one.
 
-- **Cubic-ish or weak-style grids** (e.g. 1000 × 1000 × 500): use
-  the **weak** throughput number. Inner loops are long enough for
-  the wide-SIMD machinery to pay off on AVX-512 binaries.
-- **Slab-style grids** (one dimension much smaller than the others,
-  e.g. 128 × 1984 × 1984): use the **strong** throughput number.
-  Shorter inner loops; less of the SIMD-width win is realised.
+If your global grid is **slab-shaped** (one dim much smaller than
+the others, e.g. 128 × 1984 × 1984 for a shallow shelf or a very
+thin sediment basin), the per-rank brick has a shorter inner loop
+and wide-SIMD machinery under-uses its lanes. Per-core throughput
+is lower than the table by:
 
-On SSE2-only binaries (NeSI/RCH pre-rebuild) the shape effect is
-small (<10 %). On AVX-512 binaries (cascade, NeSI-after-rebuild)
-the shape effect is large (~40 % between best and worst). For
-production-tuning beyond this rough cut, see
-[`docs/sw4-domain-shape-tuning.md`](https://github.com/ucgmsim/scale_test/blob/main/docs/sw4-domain-shape-tuning.md)
+| Binary's SIMD width | Shape effect on slab grids (vs. cubic numbers) |
+|---                  |---                                             |
+| AVX-512 (cascade, NeSI/RCH post-rebuild)             | **~30 % lower** (up to ~40 % for very slab-y shapes) |
+| AVX-2 (NeSI/RCH post-rebuild w/o AVX-512)            | ~15–25 % lower |
+| SSE2 (NeSI/RCH pre-rebuild)                          | < 10 % (within noise) |
+
+Quick rule for whether your grid is "slab-shaped" for this purpose:
+if `nz / max(nx, ny) ≲ 0.1` (or any other axis is similarly small),
+apply the slab derating.
+
+For production-tuning beyond this rough cut — including the
+closed-form back-of-envelope optimum for picking grid dimensions —
+see [`docs/sw4-domain-shape-tuning.md`](https://github.com/ucgmsim/scale_test/blob/main/docs/sw4-domain-shape-tuning.md)
 in the main repo.
 
 ## Memory
@@ -229,13 +251,12 @@ At `mem_per_cpu=2500M`: ~4.4 M cells/core; sit at 4 M for headroom.
 
 By workload type:
 
-| Goal                                            | Best choice                          | Why                                                |
-|---                                              |---                                   |---                                                 |
-| Maximum throughput per core-hour, weak-scaled   | **Cascade** (or genoa-after-rebuild) | AVX-512 + DDR5 + good weak-scaling stability       |
-| Maximum throughput, strong-scaling              | **NeSI genoa**                       | Best strong-scaling efficiency (88 %)              |
-| Predictable wall-clock budget                   | **Cascade**                          | Tightest spread (~98 % weak stability, no zigzag)  |
-| Fallback when DDR5 HPCs unavailable             | **RCH hcpu**                         | Steady DDR4 performance, consistent across jobs    |
-| Last resort                                     | NeSI milan                           | Works, but variance is bad enough to plan around   |
+| Goal                                       | Best choice                          | Why                                                |
+|---                                         |---                                   |---                                                 |
+| Maximum throughput per core-hour           | **Cascade** (or genoa-after-rebuild) | AVX-512 + DDR5 + flat 98 % scaling out to 4 nodes  |
+| Predictable wall-clock budget              | **Cascade**                          | Tightest spread (~98 % stability, no zigzag)       |
+| Fallback when DDR5 HPCs unavailable        | **RCH hcpu**                         | Steady DDR4 performance, consistent across jobs    |
+| Last resort                                | NeSI milan                           | Works, but variance is bad enough to plan around   |
 
 By queue availability: at any given moment one of the above may be
 oversubscribed; the table above is a "given equal queue waits" guide.

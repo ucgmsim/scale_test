@@ -18,26 +18,28 @@ numbers, worked examples, and caveats.
 
 ## HPCs measured
 
-| HPC           | Owner  | Architecture           | Cores/node | Per-core throughput today (G cell-updates / core-hour) |
-|---            |---     |---                     |---         |---                                                     |
-| Cascade       | ESNZ   | Zen4 Genoa, DDR5-4800  | 384        | **3.5** weak / 2.3 strong                              |
-| Mahuika genoa | REANNZ | Zen4 Genoa, DDR5-4800  | 336        | 2.5 weak / 2.5 strong (rebuild → expected ~3.5 weak)   |
-| Mahuika milan | REANNZ | Zen3, DDR4-3200        | 128        | 1.5 weak / 1.5 strong (rebuild → expected ~2.0 weak)   |
-| RCH           | UC     | Zen3, DDR4             | 144–192    | 1.2 weak / 1.2 strong (rebuild → expected ~1.5 weak)   |
+Per-core throughput numbers below assume a roughly cubic per-rank
+brick — typical for production earthquake simulations. Slab-shaped
+grids run somewhat slower; see the
+[Estimating](Estimating.md) page for the adjustment.
 
-Weak vs. strong is mainly about per-rank work shape — see the
-[Estimating](Estimating.md) page for how to pick the right number for
-your workload.
+| HPC           | Owner  | Architecture           | Cores/node | Per-core throughput (G cell-updates / core-hour) |
+|---            |---     |---                     |---         |---                                               |
+| Cascade       | ESNZ   | Zen4 Genoa, DDR5-4800  | 384        | **3.5**                                          |
+| Mahuika genoa | REANNZ | Zen4 Genoa, DDR5-4800  | 336        | 2.5 (rebuild → expected ~3.5)                    |
+| Mahuika milan | REANNZ | Zen3, DDR4-3200        | 128        | 1.5 (rebuild → expected ~2.0)                    |
+| RCH           | UC     | Zen3, DDR4             | 144–192    | 1.2 (rebuild → expected ~1.5)                    |
 
 ## Scaling behaviour
 
 ![Cross-HPC throughput](images/cross-hpc-throughput.png)
 
 Per-core throughput vs. node count, all four HPCs, no NaN checking.
-Solid lines are strong scaling (fixed 128 × 1984 × 1984 grid);
-dashed lines are weak scaling (~4 M cells/core, grid grows with
-cores). All measurements at 126 ranks/node (lowest common denominator
-across the HPCs, picked for comparability — not the
+The two curves per HPC reflect different per-rank brick shapes used
+in the scaling-test campaigns; for production planning the upper
+(weak) curve is the relevant one — that's the shape most real
+simulations have. All measurements at 126 ranks/node (lowest common
+denominator across the HPCs, picked for comparability — not the
 production-optimum on any individual cluster).
 
 ## Headline guidance
