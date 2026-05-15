@@ -174,7 +174,7 @@ On SSE2-only binaries (NeSI/RCH pre-rebuild) the shape effect is
 small (<10 %). On AVX-512 binaries (cascade, NeSI-after-rebuild)
 the shape effect is large (~40 % between best and worst). For
 production-tuning beyond this rough cut, see
-[`docs/sw4-domain-shape-tuning.md`](../tree/main/docs/sw4-domain-shape-tuning.md)
+[`docs/sw4-domain-shape-tuning.md`](https://github.com/ucgmsim/scale_test/blob/main/docs/sw4-domain-shape-tuning.md)
 in the main repo.
 
 ## Memory
