@@ -8,9 +8,9 @@ ranks/node, ~4 M cells/core. Captures per-task wall-clock timings in
 the cylc sqlite DB; an analysis pipeline turns those into
 `G cell-updates / core-hour` plots.
 
-For background on what cross-HPC comparisons have shown so far — and
-why the SW4 binaries on NeSI and RCH were rebuilt in 2026-05 — see
-the `docs/` index at the bottom of this README.
+For background on cross-HPC throughput findings and the rebuild of
+the NeSI and RCH binaries that they motivated, see the `docs/` index
+at the bottom of this README.
 
 ## Quick start
 
@@ -111,15 +111,14 @@ order depends on what you're trying to do:
   affects throughput on wide-SIMD binaries. Coarse rules of thumb
   through closed-form back-of-envelope formulas.
 
-  (The diagnostic chain that landed on the SIMD-width finding now
-  lives in `docs/cross-hpc-throughput.md` § "The SIMD-width finding",
-  not in a separate doc.)
+  (For the diagnostic chain that landed on the SIMD-width finding,
+  see `docs/cross-hpc-throughput.md` § "The SIMD-width finding".)
 
 **Want to rebuild or extend the workflow:**
 - `docs/building-sw4-on-nesi-and-rch.md` — operational recipes for
   rebuilding the SW4 binaries on NeSI and RCH. Documents all the
-  paste-gotchas, missing-libs, and ISA-dispatch oddities that
-  surfaced during the 2026-05 rebuild.
+  paste-gotchas, missing-libs, and ISA-dispatch oddities that need
+  handling.
 - `docs/scaling-test-rationale.md` — how the grid sizes, core
   counts, and other numbers in the workflow CSVs were derived.
 

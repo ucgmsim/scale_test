@@ -2,12 +2,6 @@
 
 Operational recipe for rebuilding the SW4 binaries on NeSI Mahuika
 (both genoa and milan partitions) and on RCH (hcpu partition).
-Originally written 2026-05-01 after the first rebuild attempt;
-revised 2026-05-15 after a second round caught what the first
-missed (the `fix-sfile-srf` branch needs PROJ; the smoke test
-needs an actual input file; the rpath needs more libraries on RCH
-than just OpenMPI / OpenBLAS / libstdc++). Captures the steps
-that actually worked end-to-end.
 
 For the *why* — what was wrong with the previous binaries, and the
 empirical case for rebuilding — see:
@@ -23,7 +17,7 @@ The triggers for a rebuild:
 - A new SW4 release or feature branch you want on these HPCs.
 - A toolchain refresh (newer GCC/OpenMPI/OpenBLAS).
 - Adding a new HPC to the supported set.
-- Fixing a build flag that was wrong (the original case in 2026-04).
+- Fixing a build flag that was wrong.
 
 ## Common pre-flight
 
@@ -86,11 +80,8 @@ reports `nvc++`, swap to the correct OpenMPI variant before building.
 
 PROJ is required because the production `.in` files use
 `proj=tmerc datum=WGS84 ...` and the `fix-sfile-srf` branch (and
-presumably newer SW4 in general) refuses to run when the input
-file requests a projection that the binary wasn't built to handle.
-Older SW4 used to silently fall back to internal projection code,
-which is what made the previous `baes` binary work without PROJ
-support — the new branch tightens this check.
+presumably newer SW4 in general) refuses to run when the input file
+requests a projection that the binary wasn't built to handle.
 
 ### Configure and build the genoa binary
 
@@ -166,17 +157,16 @@ srun --account=nesi00213 --partition=milan --time=00:05:00 --ntasks=1 \
   /nesi/project/nesi00213/sw4_scale_tests/smoke.in
 ```
 
-Expected: SW4 banner with `3rd party include dir: <PROJ path>`
-(rather than the old `NA`), grid setup messages, a single time step,
-clean exit. Critical: **no SIGILL, no `Illegal instruction`,
-no library-load errors, no `Fatal input error` about PROJ or
-supergrid taper width**.
+Expected: SW4 banner with `3rd party include dir: <PROJ path>`,
+grid setup messages, a single time step, clean exit. Critical:
+**no SIGILL, no `Illegal instruction`, no library-load errors,
+no `Fatal input error` about PROJ or supergrid taper width**.
 
 Argument-only smoke tests (e.g. running with `-h`) are not sufficient
 — they exit before SW4 reaches input-file parsing, so they don't
-exercise the PROJ-required check. That's how the 2026-05-01 first-pass
-rebuild slipped a PROJ-less binary into production-but-failing
-campaigns. Always use an actual `.in` file for smoke testing.
+exercise the PROJ-required check. A PROJ-less binary will pass a
+`-h` test cleanly and then fail every real run at startup. Always
+use an actual `.in` file for smoke testing.
 
 ### Install
 
@@ -534,8 +524,8 @@ and is the cleanest possible isolation of the AVX-2 vs AVX-512 step
 (same hardware, same source tree, same compiler version — only `-march`
 differs between the two binaries).
 
-The cylc workflow has a dedicated HPC variant for this — added
-2026-05-15 as a sibling of `mahuika-genoa`:
+The cylc workflow has a dedicated HPC variant for this — a sibling
+of `mahuika-genoa`:
 
 ```bash
 # wait until the main mahuika-genoa rebuild campaign has succeeded
